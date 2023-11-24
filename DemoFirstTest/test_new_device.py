@@ -58,7 +58,7 @@ def test_view():
     driver.find_element("xpath", "(//input[@type='text'])[10]").send_keys("Jio")
 
     driver.find_element("xpath", "(//input[@type='date'])[2]").send_keys("01062023")
-
+    time.sleep(3)
     driver.find_element("xpath", "(//input[@type='date'])[3]").send_keys("01012024")
     time.sleep(2)
     driver.find_element("xpath", "(//button[@type='button'])[6]").click()

@@ -1,0 +1,1209 @@
+<html>
+<head>
+<title>rewrite.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5f826b; font-style: italic;}
+.s1 { color: #bcbec4;}
+.s2 { color: #cf8e6d;}
+.s3 { color: #bcbec4;}
+.s4 { color: #7a7e85;}
+.s5 { color: #2aacb8;}
+.s6 { color: #6aab73;}
+.s7 { color: #a5c261;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+rewrite.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot;Rewrite assertion AST to produce nice error messages.&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">ast</span>
+<span class="s2">import </span><span class="s1">errno</span>
+<span class="s2">import </span><span class="s1">functools</span>
+<span class="s2">import </span><span class="s1">importlib</span><span class="s3">.</span><span class="s1">abc</span>
+<span class="s2">import </span><span class="s1">importlib</span><span class="s3">.</span><span class="s1">machinery</span>
+<span class="s2">import </span><span class="s1">importlib</span><span class="s3">.</span><span class="s1">util</span>
+<span class="s2">import </span><span class="s1">io</span>
+<span class="s2">import </span><span class="s1">itertools</span>
+<span class="s2">import </span><span class="s1">marshal</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">struct</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">tokenize</span>
+<span class="s2">import </span><span class="s1">types</span>
+<span class="s2">from </span><span class="s1">pathlib </span><span class="s2">import </span><span class="s1">Path</span>
+<span class="s2">from </span><span class="s1">pathlib </span><span class="s2">import </span><span class="s1">PurePath</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Callable</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Dict</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">IO</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Iterable</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Iterator</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">List</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Optional</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Sequence</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Set</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Tuple</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">TYPE_CHECKING</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Union</span>
+
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">_io</span><span class="s3">.</span><span class="s1">saferepr </span><span class="s2">import </span><span class="s1">DEFAULT_REPR_MAX_SIZE</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">_io</span><span class="s3">.</span><span class="s1">saferepr </span><span class="s2">import </span><span class="s1">saferepr</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">_version </span><span class="s2">import </span><span class="s1">version</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">assertion </span><span class="s2">import </span><span class="s1">util</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">assertion</span><span class="s3">.</span><span class="s1">util </span><span class="s2">import </span><span class="s3">(  </span><span class="s4"># noqa: F401</span>
+    <span class="s1">format_explanation </span><span class="s2">as </span><span class="s1">_format_explanation</span><span class="s3">,</span>
+<span class="s3">)</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">config </span><span class="s2">import </span><span class="s1">Config</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">main </span><span class="s2">import </span><span class="s1">Session</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">pathlib </span><span class="s2">import </span><span class="s1">absolutepath</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">pathlib </span><span class="s2">import </span><span class="s1">fnmatch_ex</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">stash </span><span class="s2">import </span><span class="s1">StashKey</span>
+
+<span class="s2">if </span><span class="s1">TYPE_CHECKING</span><span class="s3">:</span>
+    <span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">assertion </span><span class="s2">import </span><span class="s1">AssertionState</span>
+
+<span class="s2">if </span><span class="s1">sys</span><span class="s3">.</span><span class="s1">version_info </span><span class="s3">&gt;= (</span><span class="s5">3</span><span class="s3">, </span><span class="s5">8</span><span class="s3">):</span>
+    <span class="s1">namedExpr </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">NamedExpr</span>
+    <span class="s1">astNameConstant </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Constant</span>
+    <span class="s1">astStr </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Constant</span>
+    <span class="s1">astNum </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Constant</span>
+<span class="s2">else</span><span class="s3">:</span>
+    <span class="s1">namedExpr </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Expr</span>
+    <span class="s1">astNameConstant </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">NameConstant</span>
+    <span class="s1">astStr </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Str</span>
+    <span class="s1">astNum </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Num</span>
+
+
+<span class="s1">assertstate_key </span><span class="s3">= </span><span class="s1">StashKey</span><span class="s3">[</span><span class="s6">&quot;AssertionState&quot;</span><span class="s3">]()</span>
+
+<span class="s4"># pytest caches rewritten pycs in pycache dirs</span>
+<span class="s1">PYTEST_TAG </span><span class="s3">= </span><span class="s6">f&quot;</span><span class="s2">{</span><span class="s1">sys</span><span class="s3">.</span><span class="s1">implementation</span><span class="s3">.</span><span class="s1">cache_tag</span><span class="s2">}</span><span class="s6">-pytest-</span><span class="s2">{</span><span class="s1">version</span><span class="s2">}</span><span class="s6">&quot;</span>
+<span class="s1">PYC_EXT </span><span class="s3">= </span><span class="s6">&quot;.py&quot; </span><span class="s3">+ (</span><span class="s2">__debug__ and </span><span class="s6">&quot;c&quot; </span><span class="s2">or </span><span class="s6">&quot;o&quot;</span><span class="s3">)</span>
+<span class="s1">PYC_TAIL </span><span class="s3">= </span><span class="s6">&quot;.&quot; </span><span class="s3">+ </span><span class="s1">PYTEST_TAG </span><span class="s3">+ </span><span class="s1">PYC_EXT</span>
+
+
+<span class="s2">class </span><span class="s1">AssertionRewritingHook</span><span class="s3">(</span><span class="s1">importlib</span><span class="s3">.</span><span class="s1">abc</span><span class="s3">.</span><span class="s1">MetaPathFinder</span><span class="s3">, </span><span class="s1">importlib</span><span class="s3">.</span><span class="s1">abc</span><span class="s3">.</span><span class="s1">Loader</span><span class="s3">):</span>
+    <span class="s0">&quot;&quot;&quot;PEP302/PEP451 import hook which rewrites asserts.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">config</span><span class="s3">: </span><span class="s1">Config</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">config </span><span class="s3">= </span><span class="s1">config</span>
+        <span class="s2">try</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">fnpats </span><span class="s3">= </span><span class="s1">config</span><span class="s3">.</span><span class="s1">getini</span><span class="s3">(</span><span class="s6">&quot;python_files&quot;</span><span class="s3">)</span>
+        <span class="s2">except </span><span class="s1">ValueError</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">fnpats </span><span class="s3">= [</span><span class="s6">&quot;test_*.py&quot;</span><span class="s3">, </span><span class="s6">&quot;*_test.py&quot;</span><span class="s3">]</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">session</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">Session</span><span class="s3">] = </span><span class="s2">None</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_rewritten_names</span><span class="s3">: </span><span class="s1">Dict</span><span class="s3">[</span><span class="s1">str</span><span class="s3">, </span><span class="s1">Path</span><span class="s3">] = {}</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_must_rewrite</span><span class="s3">: </span><span class="s1">Set</span><span class="s3">[</span><span class="s1">str</span><span class="s3">] = </span><span class="s1">set</span><span class="s3">()</span>
+        <span class="s4"># flag to guard against trying to rewrite a pyc file while we are already writing another pyc file,</span>
+        <span class="s4"># which might result in infinite recursion (#3506)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_writing_pyc </span><span class="s3">= </span><span class="s2">False</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_basenames_to_check_rewrite </span><span class="s3">= {</span><span class="s6">&quot;conftest&quot;</span><span class="s3">}</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_marked_for_rewrite_cache</span><span class="s3">: </span><span class="s1">Dict</span><span class="s3">[</span><span class="s1">str</span><span class="s3">, </span><span class="s1">bool</span><span class="s3">] = {}</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_session_paths_checked </span><span class="s3">= </span><span class="s2">False</span>
+
+    <span class="s2">def </span><span class="s1">set_session</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">session</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">Session</span><span class="s3">]) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">session </span><span class="s3">= </span><span class="s1">session</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_session_paths_checked </span><span class="s3">= </span><span class="s2">False</span>
+
+    <span class="s4"># Indirection so we can mock calls to find_spec originated from the hook during testing</span>
+    <span class="s1">_find_spec </span><span class="s3">= </span><span class="s1">importlib</span><span class="s3">.</span><span class="s1">machinery</span><span class="s3">.</span><span class="s1">PathFinder</span><span class="s3">.</span><span class="s1">find_spec</span>
+
+    <span class="s2">def </span><span class="s1">find_spec</span><span class="s3">(</span>
+        <span class="s1">self</span><span class="s3">,</span>
+        <span class="s1">name</span><span class="s3">: </span><span class="s1">str</span><span class="s3">,</span>
+        <span class="s1">path</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">Sequence</span><span class="s3">[</span><span class="s1">Union</span><span class="s3">[</span><span class="s1">str</span><span class="s3">, </span><span class="s1">bytes</span><span class="s3">]]] = </span><span class="s2">None</span><span class="s3">,</span>
+        <span class="s1">target</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">types</span><span class="s3">.</span><span class="s1">ModuleType</span><span class="s3">] = </span><span class="s2">None</span><span class="s3">,</span>
+    <span class="s3">) </span><span class="s1">-&gt; Optional</span><span class="s3">[</span><span class="s1">importlib</span><span class="s3">.</span><span class="s1">machinery</span><span class="s3">.</span><span class="s1">ModuleSpec</span><span class="s3">]:</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_writing_pyc</span><span class="s3">:</span>
+            <span class="s2">return None</span>
+        <span class="s1">state </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">config</span><span class="s3">.</span><span class="s1">stash</span><span class="s3">[</span><span class="s1">assertstate_key</span><span class="s3">]</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_early_rewrite_bailout</span><span class="s3">(</span><span class="s1">name</span><span class="s3">, </span><span class="s1">state</span><span class="s3">):</span>
+            <span class="s2">return None</span>
+        <span class="s1">state</span><span class="s3">.</span><span class="s1">trace</span><span class="s3">(</span><span class="s6">&quot;find_module called for: %s&quot; </span><span class="s3">% </span><span class="s1">name</span><span class="s3">)</span>
+
+        <span class="s4"># Type ignored because mypy is confused about the `self` binding here.</span>
+        <span class="s1">spec </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_find_spec</span><span class="s3">(</span><span class="s1">name</span><span class="s3">, </span><span class="s1">path</span><span class="s3">)  </span><span class="s4"># type: ignore</span>
+        <span class="s2">if </span><span class="s3">(</span>
+            <span class="s4"># the import machinery could not find a file to import</span>
+            <span class="s1">spec </span><span class="s2">is None</span>
+            <span class="s4"># this is a namespace package (without `__init__.py`)</span>
+            <span class="s4"># there's nothing to rewrite there</span>
+            <span class="s2">or </span><span class="s1">spec</span><span class="s3">.</span><span class="s1">origin </span><span class="s2">is None</span>
+            <span class="s4"># we can only rewrite source files</span>
+            <span class="s2">or not </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">spec</span><span class="s3">.</span><span class="s1">loader</span><span class="s3">, </span><span class="s1">importlib</span><span class="s3">.</span><span class="s1">machinery</span><span class="s3">.</span><span class="s1">SourceFileLoader</span><span class="s3">)</span>
+            <span class="s4"># if the file doesn't exist, we can't rewrite it</span>
+            <span class="s2">or not </span><span class="s1">os</span><span class="s3">.</span><span class="s1">path</span><span class="s3">.</span><span class="s1">exists</span><span class="s3">(</span><span class="s1">spec</span><span class="s3">.</span><span class="s1">origin</span><span class="s3">)</span>
+        <span class="s3">):</span>
+            <span class="s2">return None</span>
+        <span class="s2">else</span><span class="s3">:</span>
+            <span class="s1">fn </span><span class="s3">= </span><span class="s1">spec</span><span class="s3">.</span><span class="s1">origin</span>
+
+        <span class="s2">if not </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_should_rewrite</span><span class="s3">(</span><span class="s1">name</span><span class="s3">, </span><span class="s1">fn</span><span class="s3">, </span><span class="s1">state</span><span class="s3">):</span>
+            <span class="s2">return None</span>
+
+        <span class="s2">return </span><span class="s1">importlib</span><span class="s3">.</span><span class="s1">util</span><span class="s3">.</span><span class="s1">spec_from_file_location</span><span class="s3">(</span>
+            <span class="s1">name</span><span class="s3">,</span>
+            <span class="s1">fn</span><span class="s3">,</span>
+            <span class="s1">loader</span><span class="s3">=</span><span class="s1">self</span><span class="s3">,</span>
+            <span class="s1">submodule_search_locations</span><span class="s3">=</span><span class="s1">spec</span><span class="s3">.</span><span class="s1">submodule_search_locations</span><span class="s3">,</span>
+        <span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">create_module</span><span class="s3">(</span>
+        <span class="s1">self</span><span class="s3">, </span><span class="s1">spec</span><span class="s3">: </span><span class="s1">importlib</span><span class="s3">.</span><span class="s1">machinery</span><span class="s3">.</span><span class="s1">ModuleSpec</span>
+    <span class="s3">) </span><span class="s1">-&gt; Optional</span><span class="s3">[</span><span class="s1">types</span><span class="s3">.</span><span class="s1">ModuleType</span><span class="s3">]:</span>
+        <span class="s2">return None  </span><span class="s4"># default behaviour is fine</span>
+
+    <span class="s2">def </span><span class="s1">exec_module</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">module</span><span class="s3">: </span><span class="s1">types</span><span class="s3">.</span><span class="s1">ModuleType</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">assert </span><span class="s1">module</span><span class="s3">.</span><span class="s1">__spec__ </span><span class="s2">is not None</span>
+        <span class="s2">assert </span><span class="s1">module</span><span class="s3">.</span><span class="s1">__spec__</span><span class="s3">.</span><span class="s1">origin </span><span class="s2">is not None</span>
+        <span class="s1">fn </span><span class="s3">= </span><span class="s1">Path</span><span class="s3">(</span><span class="s1">module</span><span class="s3">.</span><span class="s1">__spec__</span><span class="s3">.</span><span class="s1">origin</span><span class="s3">)</span>
+        <span class="s1">state </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">config</span><span class="s3">.</span><span class="s1">stash</span><span class="s3">[</span><span class="s1">assertstate_key</span><span class="s3">]</span>
+
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_rewritten_names</span><span class="s3">[</span><span class="s1">module</span><span class="s3">.</span><span class="s1">__name__</span><span class="s3">] = </span><span class="s1">fn</span>
+
+        <span class="s4"># The requested module looks like a test file, so rewrite it. This is</span>
+        <span class="s4"># the most magical part of the process: load the source, rewrite the</span>
+        <span class="s4"># asserts, and load the rewritten source. We also cache the rewritten</span>
+        <span class="s4"># module code in a special pyc. We must be aware of the possibility of</span>
+        <span class="s4"># concurrent pytest processes rewriting and loading pycs. To avoid</span>
+        <span class="s4"># tricky race conditions, we maintain the following invariant: The</span>
+        <span class="s4"># cached pyc is always a complete, valid pyc. Operations on it must be</span>
+        <span class="s4"># atomic. POSIX's atomic rename comes in handy.</span>
+        <span class="s1">write </span><span class="s3">= </span><span class="s2">not </span><span class="s1">sys</span><span class="s3">.</span><span class="s1">dont_write_bytecode</span>
+        <span class="s1">cache_dir </span><span class="s3">= </span><span class="s1">get_cache_dir</span><span class="s3">(</span><span class="s1">fn</span><span class="s3">)</span>
+        <span class="s2">if </span><span class="s1">write</span><span class="s3">:</span>
+            <span class="s1">ok </span><span class="s3">= </span><span class="s1">try_makedirs</span><span class="s3">(</span><span class="s1">cache_dir</span><span class="s3">)</span>
+            <span class="s2">if not </span><span class="s1">ok</span><span class="s3">:</span>
+                <span class="s1">write </span><span class="s3">= </span><span class="s2">False</span>
+                <span class="s1">state</span><span class="s3">.</span><span class="s1">trace</span><span class="s3">(</span><span class="s6">f&quot;read only directory: </span><span class="s2">{</span><span class="s1">cache_dir</span><span class="s2">}</span><span class="s6">&quot;</span><span class="s3">)</span>
+
+        <span class="s1">cache_name </span><span class="s3">= </span><span class="s1">fn</span><span class="s3">.</span><span class="s1">name</span><span class="s3">[:-</span><span class="s5">3</span><span class="s3">] + </span><span class="s1">PYC_TAIL</span>
+        <span class="s1">pyc </span><span class="s3">= </span><span class="s1">cache_dir </span><span class="s3">/ </span><span class="s1">cache_name</span>
+        <span class="s4"># Notice that even if we're in a read-only directory, I'm going</span>
+        <span class="s4"># to check for a cached pyc. This may not be optimal...</span>
+        <span class="s1">co </span><span class="s3">= </span><span class="s1">_read_pyc</span><span class="s3">(</span><span class="s1">fn</span><span class="s3">, </span><span class="s1">pyc</span><span class="s3">, </span><span class="s1">state</span><span class="s3">.</span><span class="s1">trace</span><span class="s3">)</span>
+        <span class="s2">if </span><span class="s1">co </span><span class="s2">is None</span><span class="s3">:</span>
+            <span class="s1">state</span><span class="s3">.</span><span class="s1">trace</span><span class="s3">(</span><span class="s6">f&quot;rewriting </span><span class="s2">{</span><span class="s1">fn</span><span class="s2">!r}</span><span class="s6">&quot;</span><span class="s3">)</span>
+            <span class="s1">source_stat</span><span class="s3">, </span><span class="s1">co </span><span class="s3">= </span><span class="s1">_rewrite_test</span><span class="s3">(</span><span class="s1">fn</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">config</span><span class="s3">)</span>
+            <span class="s2">if </span><span class="s1">write</span><span class="s3">:</span>
+                <span class="s1">self</span><span class="s3">.</span><span class="s1">_writing_pyc </span><span class="s3">= </span><span class="s2">True</span>
+                <span class="s2">try</span><span class="s3">:</span>
+                    <span class="s1">_write_pyc</span><span class="s3">(</span><span class="s1">state</span><span class="s3">, </span><span class="s1">co</span><span class="s3">, </span><span class="s1">source_stat</span><span class="s3">, </span><span class="s1">pyc</span><span class="s3">)</span>
+                <span class="s2">finally</span><span class="s3">:</span>
+                    <span class="s1">self</span><span class="s3">.</span><span class="s1">_writing_pyc </span><span class="s3">= </span><span class="s2">False</span>
+        <span class="s2">else</span><span class="s3">:</span>
+            <span class="s1">state</span><span class="s3">.</span><span class="s1">trace</span><span class="s3">(</span><span class="s6">f&quot;found cached rewritten pyc for </span><span class="s2">{</span><span class="s1">fn</span><span class="s2">}</span><span class="s6">&quot;</span><span class="s3">)</span>
+        <span class="s1">exec</span><span class="s3">(</span><span class="s1">co</span><span class="s3">, </span><span class="s1">module</span><span class="s3">.</span><span class="s1">__dict__</span><span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">_early_rewrite_bailout</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">name</span><span class="s3">: </span><span class="s1">str</span><span class="s3">, </span><span class="s1">state</span><span class="s3">: </span><span class="s6">&quot;AssertionState&quot;</span><span class="s3">) </span><span class="s1">-&gt; bool</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;A fast way to get out of rewriting modules. 
+ 
+        Profiling has shown that the call to PathFinder.find_spec (inside of 
+        the find_spec from this class) is a major slowdown, so, this method 
+        tries to filter what we're sure won't be rewritten before getting to 
+        it. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">session </span><span class="s2">is not None and not </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_session_paths_checked</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_session_paths_checked </span><span class="s3">= </span><span class="s2">True</span>
+            <span class="s2">for </span><span class="s1">initial_path </span><span class="s2">in </span><span class="s1">self</span><span class="s3">.</span><span class="s1">session</span><span class="s3">.</span><span class="s1">_initialpaths</span><span class="s3">:</span>
+                <span class="s4"># Make something as c:/projects/my_project/path.py -&gt;</span>
+                <span class="s4">#     ['c:', 'projects', 'my_project', 'path.py']</span>
+                <span class="s1">parts </span><span class="s3">= </span><span class="s1">str</span><span class="s3">(</span><span class="s1">initial_path</span><span class="s3">).</span><span class="s1">split</span><span class="s3">(</span><span class="s1">os</span><span class="s3">.</span><span class="s1">sep</span><span class="s3">)</span>
+                <span class="s4"># add 'path' to basenames to be checked.</span>
+                <span class="s1">self</span><span class="s3">.</span><span class="s1">_basenames_to_check_rewrite</span><span class="s3">.</span><span class="s1">add</span><span class="s3">(</span><span class="s1">os</span><span class="s3">.</span><span class="s1">path</span><span class="s3">.</span><span class="s1">splitext</span><span class="s3">(</span><span class="s1">parts</span><span class="s3">[-</span><span class="s5">1</span><span class="s3">])[</span><span class="s5">0</span><span class="s3">])</span>
+
+        <span class="s4"># Note: conftest already by default in _basenames_to_check_rewrite.</span>
+        <span class="s1">parts </span><span class="s3">= </span><span class="s1">name</span><span class="s3">.</span><span class="s1">split</span><span class="s3">(</span><span class="s6">&quot;.&quot;</span><span class="s3">)</span>
+        <span class="s2">if </span><span class="s1">parts</span><span class="s3">[-</span><span class="s5">1</span><span class="s3">] </span><span class="s2">in </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_basenames_to_check_rewrite</span><span class="s3">:</span>
+            <span class="s2">return False</span>
+
+        <span class="s4"># For matching the name it must be as if it was a filename.</span>
+        <span class="s1">path </span><span class="s3">= </span><span class="s1">PurePath</span><span class="s3">(*</span><span class="s1">parts</span><span class="s3">).</span><span class="s1">with_suffix</span><span class="s3">(</span><span class="s6">&quot;.py&quot;</span><span class="s3">)</span>
+
+        <span class="s2">for </span><span class="s1">pat </span><span class="s2">in </span><span class="s1">self</span><span class="s3">.</span><span class="s1">fnpats</span><span class="s3">:</span>
+            <span class="s4"># if the pattern contains subdirectories (&quot;tests/**.py&quot; for example) we can't bail out based</span>
+            <span class="s4"># on the name alone because we need to match against the full path</span>
+            <span class="s2">if </span><span class="s1">os</span><span class="s3">.</span><span class="s1">path</span><span class="s3">.</span><span class="s1">dirname</span><span class="s3">(</span><span class="s1">pat</span><span class="s3">):</span>
+                <span class="s2">return False</span>
+            <span class="s2">if </span><span class="s1">fnmatch_ex</span><span class="s3">(</span><span class="s1">pat</span><span class="s3">, </span><span class="s1">path</span><span class="s3">):</span>
+                <span class="s2">return False</span>
+
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_is_marked_for_rewrite</span><span class="s3">(</span><span class="s1">name</span><span class="s3">, </span><span class="s1">state</span><span class="s3">):</span>
+            <span class="s2">return False</span>
+
+        <span class="s1">state</span><span class="s3">.</span><span class="s1">trace</span><span class="s3">(</span><span class="s6">f&quot;early skip of rewriting module: </span><span class="s2">{</span><span class="s1">name</span><span class="s2">}</span><span class="s6">&quot;</span><span class="s3">)</span>
+        <span class="s2">return True</span>
+
+    <span class="s2">def </span><span class="s1">_should_rewrite</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">name</span><span class="s3">: </span><span class="s1">str</span><span class="s3">, </span><span class="s1">fn</span><span class="s3">: </span><span class="s1">str</span><span class="s3">, </span><span class="s1">state</span><span class="s3">: </span><span class="s6">&quot;AssertionState&quot;</span><span class="s3">) </span><span class="s1">-&gt; bool</span><span class="s3">:</span>
+        <span class="s4"># always rewrite conftest files</span>
+        <span class="s2">if </span><span class="s1">os</span><span class="s3">.</span><span class="s1">path</span><span class="s3">.</span><span class="s1">basename</span><span class="s3">(</span><span class="s1">fn</span><span class="s3">) == </span><span class="s6">&quot;conftest.py&quot;</span><span class="s3">:</span>
+            <span class="s1">state</span><span class="s3">.</span><span class="s1">trace</span><span class="s3">(</span><span class="s6">f&quot;rewriting conftest file: </span><span class="s2">{</span><span class="s1">fn</span><span class="s2">!r}</span><span class="s6">&quot;</span><span class="s3">)</span>
+            <span class="s2">return True</span>
+
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">session </span><span class="s2">is not None</span><span class="s3">:</span>
+            <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">session</span><span class="s3">.</span><span class="s1">isinitpath</span><span class="s3">(</span><span class="s1">absolutepath</span><span class="s3">(</span><span class="s1">fn</span><span class="s3">)):</span>
+                <span class="s1">state</span><span class="s3">.</span><span class="s1">trace</span><span class="s3">(</span><span class="s6">f&quot;matched test file (was specified on cmdline): </span><span class="s2">{</span><span class="s1">fn</span><span class="s2">!r}</span><span class="s6">&quot;</span><span class="s3">)</span>
+                <span class="s2">return True</span>
+
+        <span class="s4"># modules not passed explicitly on the command line are only</span>
+        <span class="s4"># rewritten if they match the naming convention for test files</span>
+        <span class="s1">fn_path </span><span class="s3">= </span><span class="s1">PurePath</span><span class="s3">(</span><span class="s1">fn</span><span class="s3">)</span>
+        <span class="s2">for </span><span class="s1">pat </span><span class="s2">in </span><span class="s1">self</span><span class="s3">.</span><span class="s1">fnpats</span><span class="s3">:</span>
+            <span class="s2">if </span><span class="s1">fnmatch_ex</span><span class="s3">(</span><span class="s1">pat</span><span class="s3">, </span><span class="s1">fn_path</span><span class="s3">):</span>
+                <span class="s1">state</span><span class="s3">.</span><span class="s1">trace</span><span class="s3">(</span><span class="s6">f&quot;matched test file </span><span class="s2">{</span><span class="s1">fn</span><span class="s2">!r}</span><span class="s6">&quot;</span><span class="s3">)</span>
+                <span class="s2">return True</span>
+
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_is_marked_for_rewrite</span><span class="s3">(</span><span class="s1">name</span><span class="s3">, </span><span class="s1">state</span><span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">_is_marked_for_rewrite</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">name</span><span class="s3">: </span><span class="s1">str</span><span class="s3">, </span><span class="s1">state</span><span class="s3">: </span><span class="s6">&quot;AssertionState&quot;</span><span class="s3">) </span><span class="s1">-&gt; bool</span><span class="s3">:</span>
+        <span class="s2">try</span><span class="s3">:</span>
+            <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_marked_for_rewrite_cache</span><span class="s3">[</span><span class="s1">name</span><span class="s3">]</span>
+        <span class="s2">except </span><span class="s1">KeyError</span><span class="s3">:</span>
+            <span class="s2">for </span><span class="s1">marked </span><span class="s2">in </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_must_rewrite</span><span class="s3">:</span>
+                <span class="s2">if </span><span class="s1">name </span><span class="s3">== </span><span class="s1">marked </span><span class="s2">or </span><span class="s1">name</span><span class="s3">.</span><span class="s1">startswith</span><span class="s3">(</span><span class="s1">marked </span><span class="s3">+ </span><span class="s6">&quot;.&quot;</span><span class="s3">):</span>
+                    <span class="s1">state</span><span class="s3">.</span><span class="s1">trace</span><span class="s3">(</span><span class="s6">f&quot;matched marked file </span><span class="s2">{</span><span class="s1">name</span><span class="s2">!r} </span><span class="s6">(from </span><span class="s2">{</span><span class="s1">marked</span><span class="s2">!r}</span><span class="s6">)&quot;</span><span class="s3">)</span>
+                    <span class="s1">self</span><span class="s3">.</span><span class="s1">_marked_for_rewrite_cache</span><span class="s3">[</span><span class="s1">name</span><span class="s3">] = </span><span class="s2">True</span>
+                    <span class="s2">return True</span>
+
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_marked_for_rewrite_cache</span><span class="s3">[</span><span class="s1">name</span><span class="s3">] = </span><span class="s2">False</span>
+            <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">mark_rewrite</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, *</span><span class="s1">names</span><span class="s3">: </span><span class="s1">str</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Mark import names as needing to be rewritten. 
+ 
+        The named module or package as well as any nested modules will 
+        be rewritten on import. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">already_imported </span><span class="s3">= (</span>
+            <span class="s1">set</span><span class="s3">(</span><span class="s1">names</span><span class="s3">).</span><span class="s1">intersection</span><span class="s3">(</span><span class="s1">sys</span><span class="s3">.</span><span class="s1">modules</span><span class="s3">).</span><span class="s1">difference</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">_rewritten_names</span><span class="s3">)</span>
+        <span class="s3">)</span>
+        <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">already_imported</span><span class="s3">:</span>
+            <span class="s1">mod </span><span class="s3">= </span><span class="s1">sys</span><span class="s3">.</span><span class="s1">modules</span><span class="s3">[</span><span class="s1">name</span><span class="s3">]</span>
+            <span class="s2">if not </span><span class="s1">AssertionRewriter</span><span class="s3">.</span><span class="s1">is_rewrite_disabled</span><span class="s3">(</span>
+                <span class="s1">mod</span><span class="s3">.</span><span class="s1">__doc__ </span><span class="s2">or </span><span class="s6">&quot;&quot;</span>
+            <span class="s3">) </span><span class="s2">and not </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">mod</span><span class="s3">.</span><span class="s1">__loader__</span><span class="s3">, </span><span class="s1">type</span><span class="s3">(</span><span class="s1">self</span><span class="s3">)):</span>
+                <span class="s1">self</span><span class="s3">.</span><span class="s1">_warn_already_imported</span><span class="s3">(</span><span class="s1">name</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_must_rewrite</span><span class="s3">.</span><span class="s1">update</span><span class="s3">(</span><span class="s1">names</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_marked_for_rewrite_cache</span><span class="s3">.</span><span class="s1">clear</span><span class="s3">()</span>
+
+    <span class="s2">def </span><span class="s1">_warn_already_imported</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">name</span><span class="s3">: </span><span class="s1">str</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">warning_types </span><span class="s2">import </span><span class="s1">PytestAssertRewriteWarning</span>
+
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">config</span><span class="s3">.</span><span class="s1">issue_config_time_warning</span><span class="s3">(</span>
+            <span class="s1">PytestAssertRewriteWarning</span><span class="s3">(</span>
+                <span class="s6">&quot;Module already imported so cannot be rewritten: %s&quot; </span><span class="s3">% </span><span class="s1">name</span>
+            <span class="s3">),</span>
+            <span class="s1">stacklevel</span><span class="s3">=</span><span class="s5">5</span><span class="s3">,</span>
+        <span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">get_data</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">pathname</span><span class="s3">: </span><span class="s1">Union</span><span class="s3">[</span><span class="s1">str</span><span class="s3">, </span><span class="s1">bytes</span><span class="s3">]) </span><span class="s1">-&gt; bytes</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Optional PEP302 get_data API.&quot;&quot;&quot;</span>
+        <span class="s2">with </span><span class="s1">open</span><span class="s3">(</span><span class="s1">pathname</span><span class="s3">, </span><span class="s6">&quot;rb&quot;</span><span class="s3">) </span><span class="s2">as </span><span class="s1">f</span><span class="s3">:</span>
+            <span class="s2">return </span><span class="s1">f</span><span class="s3">.</span><span class="s1">read</span><span class="s3">()</span>
+
+    <span class="s2">if </span><span class="s1">sys</span><span class="s3">.</span><span class="s1">version_info </span><span class="s3">&gt;= (</span><span class="s5">3</span><span class="s3">, </span><span class="s5">10</span><span class="s3">):</span>
+        <span class="s2">if </span><span class="s1">sys</span><span class="s3">.</span><span class="s1">version_info </span><span class="s3">&gt;= (</span><span class="s5">3</span><span class="s3">, </span><span class="s5">12</span><span class="s3">):</span>
+            <span class="s2">from </span><span class="s1">importlib</span><span class="s3">.</span><span class="s1">resources</span><span class="s3">.</span><span class="s1">abc </span><span class="s2">import </span><span class="s1">TraversableResources</span>
+        <span class="s2">else</span><span class="s3">:</span>
+            <span class="s2">from </span><span class="s1">importlib</span><span class="s3">.</span><span class="s1">abc </span><span class="s2">import </span><span class="s1">TraversableResources</span>
+
+        <span class="s2">def </span><span class="s1">get_resource_reader</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">name</span><span class="s3">: </span><span class="s1">str</span><span class="s3">) </span><span class="s1">-&gt; TraversableResources</span><span class="s3">:  </span><span class="s4"># type: ignore</span>
+            <span class="s2">if </span><span class="s1">sys</span><span class="s3">.</span><span class="s1">version_info </span><span class="s3">&lt; (</span><span class="s5">3</span><span class="s3">, </span><span class="s5">11</span><span class="s3">):</span>
+                <span class="s2">from </span><span class="s1">importlib</span><span class="s3">.</span><span class="s1">readers </span><span class="s2">import </span><span class="s1">FileReader</span>
+            <span class="s2">else</span><span class="s3">:</span>
+                <span class="s2">from </span><span class="s1">importlib</span><span class="s3">.</span><span class="s1">resources</span><span class="s3">.</span><span class="s1">readers </span><span class="s2">import </span><span class="s1">FileReader</span>
+
+            <span class="s2">return </span><span class="s1">FileReader</span><span class="s3">(  </span><span class="s4"># type:ignore[no-any-return]</span>
+                <span class="s1">types</span><span class="s3">.</span><span class="s1">SimpleNamespace</span><span class="s3">(</span><span class="s1">path</span><span class="s3">=</span><span class="s1">self</span><span class="s3">.</span><span class="s1">_rewritten_names</span><span class="s3">[</span><span class="s1">name</span><span class="s3">])</span>
+            <span class="s3">)</span>
+
+
+<span class="s2">def </span><span class="s1">_write_pyc_fp</span><span class="s3">(</span>
+    <span class="s1">fp</span><span class="s3">: </span><span class="s1">IO</span><span class="s3">[</span><span class="s1">bytes</span><span class="s3">], </span><span class="s1">source_stat</span><span class="s3">: </span><span class="s1">os</span><span class="s3">.</span><span class="s1">stat_result</span><span class="s3">, </span><span class="s1">co</span><span class="s3">: </span><span class="s1">types</span><span class="s3">.</span><span class="s1">CodeType</span>
+<span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+    <span class="s4"># Technically, we don't have to have the same pyc format as</span>
+    <span class="s4"># (C)Python, since these &quot;pycs&quot; should never be seen by builtin</span>
+    <span class="s4"># import. However, there's little reason to deviate.</span>
+    <span class="s1">fp</span><span class="s3">.</span><span class="s1">write</span><span class="s3">(</span><span class="s1">importlib</span><span class="s3">.</span><span class="s1">util</span><span class="s3">.</span><span class="s1">MAGIC_NUMBER</span><span class="s3">)</span>
+    <span class="s4"># https://www.python.org/dev/peps/pep-0552/</span>
+    <span class="s1">flags </span><span class="s3">= </span><span class="s7">b&quot;</span><span class="s2">\x00\x00\x00\x00</span><span class="s7">&quot;</span>
+    <span class="s1">fp</span><span class="s3">.</span><span class="s1">write</span><span class="s3">(</span><span class="s1">flags</span><span class="s3">)</span>
+    <span class="s4"># as of now, bytecode header expects 32-bit numbers for size and mtime (#4903)</span>
+    <span class="s1">mtime </span><span class="s3">= </span><span class="s1">int</span><span class="s3">(</span><span class="s1">source_stat</span><span class="s3">.</span><span class="s1">st_mtime</span><span class="s3">) &amp; </span><span class="s5">0xFFFFFFFF</span>
+    <span class="s1">size </span><span class="s3">= </span><span class="s1">source_stat</span><span class="s3">.</span><span class="s1">st_size </span><span class="s3">&amp; </span><span class="s5">0xFFFFFFFF</span>
+    <span class="s4"># &quot;&lt;LL&quot; stands for 2 unsigned longs, little-endian.</span>
+    <span class="s1">fp</span><span class="s3">.</span><span class="s1">write</span><span class="s3">(</span><span class="s1">struct</span><span class="s3">.</span><span class="s1">pack</span><span class="s3">(</span><span class="s6">&quot;&lt;LL&quot;</span><span class="s3">, </span><span class="s1">mtime</span><span class="s3">, </span><span class="s1">size</span><span class="s3">))</span>
+    <span class="s1">fp</span><span class="s3">.</span><span class="s1">write</span><span class="s3">(</span><span class="s1">marshal</span><span class="s3">.</span><span class="s1">dumps</span><span class="s3">(</span><span class="s1">co</span><span class="s3">))</span>
+
+
+<span class="s2">def </span><span class="s1">_write_pyc</span><span class="s3">(</span>
+    <span class="s1">state</span><span class="s3">: </span><span class="s6">&quot;AssertionState&quot;</span><span class="s3">,</span>
+    <span class="s1">co</span><span class="s3">: </span><span class="s1">types</span><span class="s3">.</span><span class="s1">CodeType</span><span class="s3">,</span>
+    <span class="s1">source_stat</span><span class="s3">: </span><span class="s1">os</span><span class="s3">.</span><span class="s1">stat_result</span><span class="s3">,</span>
+    <span class="s1">pyc</span><span class="s3">: </span><span class="s1">Path</span><span class="s3">,</span>
+<span class="s3">) </span><span class="s1">-&gt; bool</span><span class="s3">:</span>
+    <span class="s1">proc_pyc </span><span class="s3">= </span><span class="s6">f&quot;</span><span class="s2">{</span><span class="s1">pyc</span><span class="s2">}</span><span class="s6">.</span><span class="s2">{</span><span class="s1">os</span><span class="s3">.</span><span class="s1">getpid</span><span class="s3">()</span><span class="s2">}</span><span class="s6">&quot;</span>
+    <span class="s2">try</span><span class="s3">:</span>
+        <span class="s2">with </span><span class="s1">open</span><span class="s3">(</span><span class="s1">proc_pyc</span><span class="s3">, </span><span class="s6">&quot;wb&quot;</span><span class="s3">) </span><span class="s2">as </span><span class="s1">fp</span><span class="s3">:</span>
+            <span class="s1">_write_pyc_fp</span><span class="s3">(</span><span class="s1">fp</span><span class="s3">, </span><span class="s1">source_stat</span><span class="s3">, </span><span class="s1">co</span><span class="s3">)</span>
+    <span class="s2">except </span><span class="s1">OSError </span><span class="s2">as </span><span class="s1">e</span><span class="s3">:</span>
+        <span class="s1">state</span><span class="s3">.</span><span class="s1">trace</span><span class="s3">(</span><span class="s6">f&quot;error writing pyc file at </span><span class="s2">{</span><span class="s1">proc_pyc</span><span class="s2">}</span><span class="s6">: errno=</span><span class="s2">{</span><span class="s1">e</span><span class="s3">.</span><span class="s1">errno</span><span class="s2">}</span><span class="s6">&quot;</span><span class="s3">)</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">try</span><span class="s3">:</span>
+        <span class="s1">os</span><span class="s3">.</span><span class="s1">replace</span><span class="s3">(</span><span class="s1">proc_pyc</span><span class="s3">, </span><span class="s1">pyc</span><span class="s3">)</span>
+    <span class="s2">except </span><span class="s1">OSError </span><span class="s2">as </span><span class="s1">e</span><span class="s3">:</span>
+        <span class="s1">state</span><span class="s3">.</span><span class="s1">trace</span><span class="s3">(</span><span class="s6">f&quot;error writing pyc file at </span><span class="s2">{</span><span class="s1">pyc</span><span class="s2">}</span><span class="s6">: </span><span class="s2">{</span><span class="s1">e</span><span class="s2">}</span><span class="s6">&quot;</span><span class="s3">)</span>
+        <span class="s4"># we ignore any failure to write the cache file</span>
+        <span class="s4"># there are many reasons, permission-denied, pycache dir being a</span>
+        <span class="s4"># file etc.</span>
+        <span class="s2">return False</span>
+    <span class="s2">return True</span>
+
+
+<span class="s2">def </span><span class="s1">_rewrite_test</span><span class="s3">(</span><span class="s1">fn</span><span class="s3">: </span><span class="s1">Path</span><span class="s3">, </span><span class="s1">config</span><span class="s3">: </span><span class="s1">Config</span><span class="s3">) </span><span class="s1">-&gt; Tuple</span><span class="s3">[</span><span class="s1">os</span><span class="s3">.</span><span class="s1">stat_result</span><span class="s3">, </span><span class="s1">types</span><span class="s3">.</span><span class="s1">CodeType</span><span class="s3">]:</span>
+    <span class="s0">&quot;&quot;&quot;Read and rewrite *fn* and return the code object.&quot;&quot;&quot;</span>
+    <span class="s1">stat </span><span class="s3">= </span><span class="s1">os</span><span class="s3">.</span><span class="s1">stat</span><span class="s3">(</span><span class="s1">fn</span><span class="s3">)</span>
+    <span class="s1">source </span><span class="s3">= </span><span class="s1">fn</span><span class="s3">.</span><span class="s1">read_bytes</span><span class="s3">()</span>
+    <span class="s1">strfn </span><span class="s3">= </span><span class="s1">str</span><span class="s3">(</span><span class="s1">fn</span><span class="s3">)</span>
+    <span class="s1">tree </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">parse</span><span class="s3">(</span><span class="s1">source</span><span class="s3">, </span><span class="s1">filename</span><span class="s3">=</span><span class="s1">strfn</span><span class="s3">)</span>
+    <span class="s1">rewrite_asserts</span><span class="s3">(</span><span class="s1">tree</span><span class="s3">, </span><span class="s1">source</span><span class="s3">, </span><span class="s1">strfn</span><span class="s3">, </span><span class="s1">config</span><span class="s3">)</span>
+    <span class="s1">co </span><span class="s3">= </span><span class="s1">compile</span><span class="s3">(</span><span class="s1">tree</span><span class="s3">, </span><span class="s1">strfn</span><span class="s3">, </span><span class="s6">&quot;exec&quot;</span><span class="s3">, </span><span class="s1">dont_inherit</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+    <span class="s2">return </span><span class="s1">stat</span><span class="s3">, </span><span class="s1">co</span>
+
+
+<span class="s2">def </span><span class="s1">_read_pyc</span><span class="s3">(</span>
+    <span class="s1">source</span><span class="s3">: </span><span class="s1">Path</span><span class="s3">, </span><span class="s1">pyc</span><span class="s3">: </span><span class="s1">Path</span><span class="s3">, </span><span class="s1">trace</span><span class="s3">: </span><span class="s1">Callable</span><span class="s3">[[</span><span class="s1">str</span><span class="s3">], </span><span class="s2">None</span><span class="s3">] = </span><span class="s2">lambda </span><span class="s1">x</span><span class="s3">: </span><span class="s2">None</span>
+<span class="s3">) </span><span class="s1">-&gt; Optional</span><span class="s3">[</span><span class="s1">types</span><span class="s3">.</span><span class="s1">CodeType</span><span class="s3">]:</span>
+    <span class="s0">&quot;&quot;&quot;Possibly read a pytest pyc containing rewritten code. 
+ 
+    Return rewritten code if successful or None if not. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">try</span><span class="s3">:</span>
+        <span class="s1">fp </span><span class="s3">= </span><span class="s1">open</span><span class="s3">(</span><span class="s1">pyc</span><span class="s3">, </span><span class="s6">&quot;rb&quot;</span><span class="s3">)</span>
+    <span class="s2">except </span><span class="s1">OSError</span><span class="s3">:</span>
+        <span class="s2">return None</span>
+    <span class="s2">with </span><span class="s1">fp</span><span class="s3">:</span>
+        <span class="s2">try</span><span class="s3">:</span>
+            <span class="s1">stat_result </span><span class="s3">= </span><span class="s1">os</span><span class="s3">.</span><span class="s1">stat</span><span class="s3">(</span><span class="s1">source</span><span class="s3">)</span>
+            <span class="s1">mtime </span><span class="s3">= </span><span class="s1">int</span><span class="s3">(</span><span class="s1">stat_result</span><span class="s3">.</span><span class="s1">st_mtime</span><span class="s3">)</span>
+            <span class="s1">size </span><span class="s3">= </span><span class="s1">stat_result</span><span class="s3">.</span><span class="s1">st_size</span>
+            <span class="s1">data </span><span class="s3">= </span><span class="s1">fp</span><span class="s3">.</span><span class="s1">read</span><span class="s3">(</span><span class="s5">16</span><span class="s3">)</span>
+        <span class="s2">except </span><span class="s1">OSError </span><span class="s2">as </span><span class="s1">e</span><span class="s3">:</span>
+            <span class="s1">trace</span><span class="s3">(</span><span class="s6">f&quot;_read_pyc(</span><span class="s2">{</span><span class="s1">source</span><span class="s2">}</span><span class="s6">): OSError </span><span class="s2">{</span><span class="s1">e</span><span class="s2">}</span><span class="s6">&quot;</span><span class="s3">)</span>
+            <span class="s2">return None</span>
+        <span class="s4"># Check for invalid or out of date pyc file.</span>
+        <span class="s2">if </span><span class="s1">len</span><span class="s3">(</span><span class="s1">data</span><span class="s3">) != (</span><span class="s5">16</span><span class="s3">):</span>
+            <span class="s1">trace</span><span class="s3">(</span><span class="s6">&quot;_read_pyc(%s): invalid pyc (too short)&quot; </span><span class="s3">% </span><span class="s1">source</span><span class="s3">)</span>
+            <span class="s2">return None</span>
+        <span class="s2">if </span><span class="s1">data</span><span class="s3">[:</span><span class="s5">4</span><span class="s3">] != </span><span class="s1">importlib</span><span class="s3">.</span><span class="s1">util</span><span class="s3">.</span><span class="s1">MAGIC_NUMBER</span><span class="s3">:</span>
+            <span class="s1">trace</span><span class="s3">(</span><span class="s6">&quot;_read_pyc(%s): invalid pyc (bad magic number)&quot; </span><span class="s3">% </span><span class="s1">source</span><span class="s3">)</span>
+            <span class="s2">return None</span>
+        <span class="s2">if </span><span class="s1">data</span><span class="s3">[</span><span class="s5">4</span><span class="s3">:</span><span class="s5">8</span><span class="s3">] != </span><span class="s7">b&quot;</span><span class="s2">\x00\x00\x00\x00</span><span class="s7">&quot;</span><span class="s3">:</span>
+            <span class="s1">trace</span><span class="s3">(</span><span class="s6">&quot;_read_pyc(%s): invalid pyc (unsupported flags)&quot; </span><span class="s3">% </span><span class="s1">source</span><span class="s3">)</span>
+            <span class="s2">return None</span>
+        <span class="s1">mtime_data </span><span class="s3">= </span><span class="s1">data</span><span class="s3">[</span><span class="s5">8</span><span class="s3">:</span><span class="s5">12</span><span class="s3">]</span>
+        <span class="s2">if </span><span class="s1">int</span><span class="s3">.</span><span class="s1">from_bytes</span><span class="s3">(</span><span class="s1">mtime_data</span><span class="s3">, </span><span class="s6">&quot;little&quot;</span><span class="s3">) != </span><span class="s1">mtime </span><span class="s3">&amp; </span><span class="s5">0xFFFFFFFF</span><span class="s3">:</span>
+            <span class="s1">trace</span><span class="s3">(</span><span class="s6">&quot;_read_pyc(%s): out of date&quot; </span><span class="s3">% </span><span class="s1">source</span><span class="s3">)</span>
+            <span class="s2">return None</span>
+        <span class="s1">size_data </span><span class="s3">= </span><span class="s1">data</span><span class="s3">[</span><span class="s5">12</span><span class="s3">:</span><span class="s5">16</span><span class="s3">]</span>
+        <span class="s2">if </span><span class="s1">int</span><span class="s3">.</span><span class="s1">from_bytes</span><span class="s3">(</span><span class="s1">size_data</span><span class="s3">, </span><span class="s6">&quot;little&quot;</span><span class="s3">) != </span><span class="s1">size </span><span class="s3">&amp; </span><span class="s5">0xFFFFFFFF</span><span class="s3">:</span>
+            <span class="s1">trace</span><span class="s3">(</span><span class="s6">&quot;_read_pyc(%s): invalid pyc (incorrect size)&quot; </span><span class="s3">% </span><span class="s1">source</span><span class="s3">)</span>
+            <span class="s2">return None</span>
+        <span class="s2">try</span><span class="s3">:</span>
+            <span class="s1">co </span><span class="s3">= </span><span class="s1">marshal</span><span class="s3">.</span><span class="s1">load</span><span class="s3">(</span><span class="s1">fp</span><span class="s3">)</span>
+        <span class="s2">except </span><span class="s1">Exception </span><span class="s2">as </span><span class="s1">e</span><span class="s3">:</span>
+            <span class="s1">trace</span><span class="s3">(</span><span class="s6">f&quot;_read_pyc(</span><span class="s2">{</span><span class="s1">source</span><span class="s2">}</span><span class="s6">): marshal.load error </span><span class="s2">{</span><span class="s1">e</span><span class="s2">}</span><span class="s6">&quot;</span><span class="s3">)</span>
+            <span class="s2">return None</span>
+        <span class="s2">if not </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">co</span><span class="s3">, </span><span class="s1">types</span><span class="s3">.</span><span class="s1">CodeType</span><span class="s3">):</span>
+            <span class="s1">trace</span><span class="s3">(</span><span class="s6">&quot;_read_pyc(%s): not a code object&quot; </span><span class="s3">% </span><span class="s1">source</span><span class="s3">)</span>
+            <span class="s2">return None</span>
+        <span class="s2">return </span><span class="s1">co</span>
+
+
+<span class="s2">def </span><span class="s1">rewrite_asserts</span><span class="s3">(</span>
+    <span class="s1">mod</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Module</span><span class="s3">,</span>
+    <span class="s1">source</span><span class="s3">: </span><span class="s1">bytes</span><span class="s3">,</span>
+    <span class="s1">module_path</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">str</span><span class="s3">] = </span><span class="s2">None</span><span class="s3">,</span>
+    <span class="s1">config</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">Config</span><span class="s3">] = </span><span class="s2">None</span><span class="s3">,</span>
+<span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+    <span class="s0">&quot;&quot;&quot;Rewrite the assert statements in mod.&quot;&quot;&quot;</span>
+    <span class="s1">AssertionRewriter</span><span class="s3">(</span><span class="s1">module_path</span><span class="s3">, </span><span class="s1">config</span><span class="s3">, </span><span class="s1">source</span><span class="s3">).</span><span class="s1">run</span><span class="s3">(</span><span class="s1">mod</span><span class="s3">)</span>
+
+
+<span class="s2">def </span><span class="s1">_saferepr</span><span class="s3">(</span><span class="s1">obj</span><span class="s3">: </span><span class="s1">object</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+    <span class="s0">r&quot;&quot;&quot;Get a safe repr of an object for assertion error messages. 
+ 
+    The assertion formatting (util.format_explanation()) requires 
+    newlines to be escaped since they are a special character for it. 
+    Normally assertion.util.format_explanation() does this but for a 
+    custom repr it is possible to contain one of the special escape 
+    sequences, especially '\n{' and '\n}' are likely to be present in 
+    JSON reprs. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">maxsize </span><span class="s3">= </span><span class="s1">_get_maxsize_for_saferepr</span><span class="s3">(</span><span class="s1">util</span><span class="s3">.</span><span class="s1">_config</span><span class="s3">)</span>
+    <span class="s2">return </span><span class="s1">saferepr</span><span class="s3">(</span><span class="s1">obj</span><span class="s3">, </span><span class="s1">maxsize</span><span class="s3">=</span><span class="s1">maxsize</span><span class="s3">).</span><span class="s1">replace</span><span class="s3">(</span><span class="s6">&quot;</span><span class="s2">\n</span><span class="s6">&quot;</span><span class="s3">, </span><span class="s6">&quot;</span><span class="s2">\\</span><span class="s6">n&quot;</span><span class="s3">)</span>
+
+
+<span class="s2">def </span><span class="s1">_get_maxsize_for_saferepr</span><span class="s3">(</span><span class="s1">config</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">Config</span><span class="s3">]) </span><span class="s1">-&gt; Optional</span><span class="s3">[</span><span class="s1">int</span><span class="s3">]:</span>
+    <span class="s0">&quot;&quot;&quot;Get `maxsize` configuration for saferepr based on the given config object.&quot;&quot;&quot;</span>
+    <span class="s1">verbosity </span><span class="s3">= </span><span class="s1">config</span><span class="s3">.</span><span class="s1">getoption</span><span class="s3">(</span><span class="s6">&quot;verbose&quot;</span><span class="s3">) </span><span class="s2">if </span><span class="s1">config </span><span class="s2">is not None else </span><span class="s5">0</span>
+    <span class="s2">if </span><span class="s1">verbosity </span><span class="s3">&gt;= </span><span class="s5">2</span><span class="s3">:</span>
+        <span class="s2">return None</span>
+    <span class="s2">if </span><span class="s1">verbosity </span><span class="s3">&gt;= </span><span class="s5">1</span><span class="s3">:</span>
+        <span class="s2">return </span><span class="s1">DEFAULT_REPR_MAX_SIZE </span><span class="s3">* </span><span class="s5">10</span>
+    <span class="s2">return </span><span class="s1">DEFAULT_REPR_MAX_SIZE</span>
+
+
+<span class="s2">def </span><span class="s1">_format_assertmsg</span><span class="s3">(</span><span class="s1">obj</span><span class="s3">: </span><span class="s1">object</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+    <span class="s0">r&quot;&quot;&quot;Format the custom assertion message given. 
+ 
+    For strings this simply replaces newlines with '\n~' so that 
+    util.format_explanation() will preserve them instead of escaping 
+    newlines.  For other objects saferepr() is used first. 
+    &quot;&quot;&quot;</span>
+    <span class="s4"># reprlib appears to have a bug which means that if a string</span>
+    <span class="s4"># contains a newline it gets escaped, however if an object has a</span>
+    <span class="s4"># .__repr__() which contains newlines it does not get escaped.</span>
+    <span class="s4"># However in either case we want to preserve the newline.</span>
+    <span class="s1">replaces </span><span class="s3">= [(</span><span class="s6">&quot;</span><span class="s2">\n</span><span class="s6">&quot;</span><span class="s3">, </span><span class="s6">&quot;</span><span class="s2">\n</span><span class="s6">~&quot;</span><span class="s3">), (</span><span class="s6">&quot;%&quot;</span><span class="s3">, </span><span class="s6">&quot;%%&quot;</span><span class="s3">)]</span>
+    <span class="s2">if not </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">obj</span><span class="s3">, </span><span class="s1">str</span><span class="s3">):</span>
+        <span class="s1">obj </span><span class="s3">= </span><span class="s1">saferepr</span><span class="s3">(</span><span class="s1">obj</span><span class="s3">)</span>
+        <span class="s1">replaces</span><span class="s3">.</span><span class="s1">append</span><span class="s3">((</span><span class="s6">&quot;</span><span class="s2">\\</span><span class="s6">n&quot;</span><span class="s3">, </span><span class="s6">&quot;</span><span class="s2">\n</span><span class="s6">~&quot;</span><span class="s3">))</span>
+
+    <span class="s2">for </span><span class="s1">r1</span><span class="s3">, </span><span class="s1">r2 </span><span class="s2">in </span><span class="s1">replaces</span><span class="s3">:</span>
+        <span class="s1">obj </span><span class="s3">= </span><span class="s1">obj</span><span class="s3">.</span><span class="s1">replace</span><span class="s3">(</span><span class="s1">r1</span><span class="s3">, </span><span class="s1">r2</span><span class="s3">)</span>
+
+    <span class="s2">return </span><span class="s1">obj</span>
+
+
+<span class="s2">def </span><span class="s1">_should_repr_global_name</span><span class="s3">(</span><span class="s1">obj</span><span class="s3">: </span><span class="s1">object</span><span class="s3">) </span><span class="s1">-&gt; bool</span><span class="s3">:</span>
+    <span class="s2">if </span><span class="s1">callable</span><span class="s3">(</span><span class="s1">obj</span><span class="s3">):</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">try</span><span class="s3">:</span>
+        <span class="s2">return not </span><span class="s1">hasattr</span><span class="s3">(</span><span class="s1">obj</span><span class="s3">, </span><span class="s6">&quot;__name__&quot;</span><span class="s3">)</span>
+    <span class="s2">except </span><span class="s1">Exception</span><span class="s3">:</span>
+        <span class="s2">return True</span>
+
+
+<span class="s2">def </span><span class="s1">_format_boolop</span><span class="s3">(</span><span class="s1">explanations</span><span class="s3">: </span><span class="s1">Iterable</span><span class="s3">[</span><span class="s1">str</span><span class="s3">], </span><span class="s1">is_or</span><span class="s3">: </span><span class="s1">bool</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+    <span class="s1">explanation </span><span class="s3">= </span><span class="s6">&quot;(&quot; </span><span class="s3">+ (</span><span class="s1">is_or </span><span class="s2">and </span><span class="s6">&quot; or &quot; </span><span class="s2">or </span><span class="s6">&quot; and &quot;</span><span class="s3">).</span><span class="s1">join</span><span class="s3">(</span><span class="s1">explanations</span><span class="s3">) + </span><span class="s6">&quot;)&quot;</span>
+    <span class="s2">return </span><span class="s1">explanation</span><span class="s3">.</span><span class="s1">replace</span><span class="s3">(</span><span class="s6">&quot;%&quot;</span><span class="s3">, </span><span class="s6">&quot;%%&quot;</span><span class="s3">)</span>
+
+
+<span class="s2">def </span><span class="s1">_call_reprcompare</span><span class="s3">(</span>
+    <span class="s1">ops</span><span class="s3">: </span><span class="s1">Sequence</span><span class="s3">[</span><span class="s1">str</span><span class="s3">],</span>
+    <span class="s1">results</span><span class="s3">: </span><span class="s1">Sequence</span><span class="s3">[</span><span class="s1">bool</span><span class="s3">],</span>
+    <span class="s1">expls</span><span class="s3">: </span><span class="s1">Sequence</span><span class="s3">[</span><span class="s1">str</span><span class="s3">],</span>
+    <span class="s1">each_obj</span><span class="s3">: </span><span class="s1">Sequence</span><span class="s3">[</span><span class="s1">object</span><span class="s3">],</span>
+<span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+    <span class="s2">for </span><span class="s1">i</span><span class="s3">, </span><span class="s1">res</span><span class="s3">, </span><span class="s1">expl </span><span class="s2">in </span><span class="s1">zip</span><span class="s3">(</span><span class="s1">range</span><span class="s3">(</span><span class="s1">len</span><span class="s3">(</span><span class="s1">ops</span><span class="s3">)), </span><span class="s1">results</span><span class="s3">, </span><span class="s1">expls</span><span class="s3">):</span>
+        <span class="s2">try</span><span class="s3">:</span>
+            <span class="s1">done </span><span class="s3">= </span><span class="s2">not </span><span class="s1">res</span>
+        <span class="s2">except </span><span class="s1">Exception</span><span class="s3">:</span>
+            <span class="s1">done </span><span class="s3">= </span><span class="s2">True</span>
+        <span class="s2">if </span><span class="s1">done</span><span class="s3">:</span>
+            <span class="s2">break</span>
+    <span class="s2">if </span><span class="s1">util</span><span class="s3">.</span><span class="s1">_reprcompare </span><span class="s2">is not None</span><span class="s3">:</span>
+        <span class="s1">custom </span><span class="s3">= </span><span class="s1">util</span><span class="s3">.</span><span class="s1">_reprcompare</span><span class="s3">(</span><span class="s1">ops</span><span class="s3">[</span><span class="s1">i</span><span class="s3">], </span><span class="s1">each_obj</span><span class="s3">[</span><span class="s1">i</span><span class="s3">], </span><span class="s1">each_obj</span><span class="s3">[</span><span class="s1">i </span><span class="s3">+ </span><span class="s5">1</span><span class="s3">])</span>
+        <span class="s2">if </span><span class="s1">custom </span><span class="s2">is not None</span><span class="s3">:</span>
+            <span class="s2">return </span><span class="s1">custom</span>
+    <span class="s2">return </span><span class="s1">expl</span>
+
+
+<span class="s2">def </span><span class="s1">_call_assertion_pass</span><span class="s3">(</span><span class="s1">lineno</span><span class="s3">: </span><span class="s1">int</span><span class="s3">, </span><span class="s1">orig</span><span class="s3">: </span><span class="s1">str</span><span class="s3">, </span><span class="s1">expl</span><span class="s3">: </span><span class="s1">str</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+    <span class="s2">if </span><span class="s1">util</span><span class="s3">.</span><span class="s1">_assertion_pass </span><span class="s2">is not None</span><span class="s3">:</span>
+        <span class="s1">util</span><span class="s3">.</span><span class="s1">_assertion_pass</span><span class="s3">(</span><span class="s1">lineno</span><span class="s3">, </span><span class="s1">orig</span><span class="s3">, </span><span class="s1">expl</span><span class="s3">)</span>
+
+
+<span class="s2">def </span><span class="s1">_check_if_assertion_pass_impl</span><span class="s3">() </span><span class="s1">-&gt; bool</span><span class="s3">:</span>
+    <span class="s0">&quot;&quot;&quot;Check if any plugins implement the pytest_assertion_pass hook 
+    in order not to generate explanation unnecessarily (might be expensive).&quot;&quot;&quot;</span>
+    <span class="s2">return True if </span><span class="s1">util</span><span class="s3">.</span><span class="s1">_assertion_pass </span><span class="s2">else False</span>
+
+
+<span class="s1">UNARY_MAP </span><span class="s3">= {</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Not</span><span class="s3">: </span><span class="s6">&quot;not %s&quot;</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Invert</span><span class="s3">: </span><span class="s6">&quot;~%s&quot;</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">USub</span><span class="s3">: </span><span class="s6">&quot;-%s&quot;</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">UAdd</span><span class="s3">: </span><span class="s6">&quot;+%s&quot;</span><span class="s3">}</span>
+
+<span class="s1">BINOP_MAP </span><span class="s3">= {</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">BitOr</span><span class="s3">: </span><span class="s6">&quot;|&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">BitXor</span><span class="s3">: </span><span class="s6">&quot;^&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">BitAnd</span><span class="s3">: </span><span class="s6">&quot;&amp;&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">LShift</span><span class="s3">: </span><span class="s6">&quot;&lt;&lt;&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">RShift</span><span class="s3">: </span><span class="s6">&quot;&gt;&gt;&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">Add</span><span class="s3">: </span><span class="s6">&quot;+&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">Sub</span><span class="s3">: </span><span class="s6">&quot;-&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">Mult</span><span class="s3">: </span><span class="s6">&quot;*&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">Div</span><span class="s3">: </span><span class="s6">&quot;/&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">FloorDiv</span><span class="s3">: </span><span class="s6">&quot;//&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">Mod</span><span class="s3">: </span><span class="s6">&quot;%%&quot;</span><span class="s3">,  </span><span class="s4"># escaped for string formatting</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">Eq</span><span class="s3">: </span><span class="s6">&quot;==&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">NotEq</span><span class="s3">: </span><span class="s6">&quot;!=&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">Lt</span><span class="s3">: </span><span class="s6">&quot;&lt;&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">LtE</span><span class="s3">: </span><span class="s6">&quot;&lt;=&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">Gt</span><span class="s3">: </span><span class="s6">&quot;&gt;&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">GtE</span><span class="s3">: </span><span class="s6">&quot;&gt;=&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">Pow</span><span class="s3">: </span><span class="s6">&quot;**&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">Is</span><span class="s3">: </span><span class="s6">&quot;is&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">IsNot</span><span class="s3">: </span><span class="s6">&quot;is not&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">In</span><span class="s3">: </span><span class="s6">&quot;in&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">NotIn</span><span class="s3">: </span><span class="s6">&quot;not in&quot;</span><span class="s3">,</span>
+    <span class="s1">ast</span><span class="s3">.</span><span class="s1">MatMult</span><span class="s3">: </span><span class="s6">&quot;@&quot;</span><span class="s3">,</span>
+<span class="s3">}</span>
+
+
+<span class="s2">def </span><span class="s1">traverse_node</span><span class="s3">(</span><span class="s1">node</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">AST</span><span class="s3">) </span><span class="s1">-&gt; Iterator</span><span class="s3">[</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">AST</span><span class="s3">]:</span>
+    <span class="s0">&quot;&quot;&quot;Recursively yield node and all its children in depth-first order.&quot;&quot;&quot;</span>
+    <span class="s2">yield </span><span class="s1">node</span>
+    <span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">iter_child_nodes</span><span class="s3">(</span><span class="s1">node</span><span class="s3">):</span>
+        <span class="s2">yield from </span><span class="s1">traverse_node</span><span class="s3">(</span><span class="s1">child</span><span class="s3">)</span>
+
+
+<span class="s3">@</span><span class="s1">functools</span><span class="s3">.</span><span class="s1">lru_cache</span><span class="s3">(</span><span class="s1">maxsize</span><span class="s3">=</span><span class="s5">1</span><span class="s3">)</span>
+<span class="s2">def </span><span class="s1">_get_assertion_exprs</span><span class="s3">(</span><span class="s1">src</span><span class="s3">: </span><span class="s1">bytes</span><span class="s3">) </span><span class="s1">-&gt; Dict</span><span class="s3">[</span><span class="s1">int</span><span class="s3">, </span><span class="s1">str</span><span class="s3">]:</span>
+    <span class="s0">&quot;&quot;&quot;Return a mapping from {lineno: &quot;assertion test expression&quot;}.&quot;&quot;&quot;</span>
+    <span class="s1">ret</span><span class="s3">: </span><span class="s1">Dict</span><span class="s3">[</span><span class="s1">int</span><span class="s3">, </span><span class="s1">str</span><span class="s3">] = {}</span>
+
+    <span class="s1">depth </span><span class="s3">= </span><span class="s5">0</span>
+    <span class="s1">lines</span><span class="s3">: </span><span class="s1">List</span><span class="s3">[</span><span class="s1">str</span><span class="s3">] = []</span>
+    <span class="s1">assert_lineno</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">int</span><span class="s3">] = </span><span class="s2">None</span>
+    <span class="s1">seen_lines</span><span class="s3">: </span><span class="s1">Set</span><span class="s3">[</span><span class="s1">int</span><span class="s3">] = </span><span class="s1">set</span><span class="s3">()</span>
+
+    <span class="s2">def </span><span class="s1">_write_and_reset</span><span class="s3">() </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">nonlocal </span><span class="s1">depth</span><span class="s3">, </span><span class="s1">lines</span><span class="s3">, </span><span class="s1">assert_lineno</span><span class="s3">, </span><span class="s1">seen_lines</span>
+        <span class="s2">assert </span><span class="s1">assert_lineno </span><span class="s2">is not None</span>
+        <span class="s1">ret</span><span class="s3">[</span><span class="s1">assert_lineno</span><span class="s3">] = </span><span class="s6">&quot;&quot;</span><span class="s3">.</span><span class="s1">join</span><span class="s3">(</span><span class="s1">lines</span><span class="s3">).</span><span class="s1">rstrip</span><span class="s3">().</span><span class="s1">rstrip</span><span class="s3">(</span><span class="s6">&quot;</span><span class="s2">\\</span><span class="s6">&quot;</span><span class="s3">)</span>
+        <span class="s1">depth </span><span class="s3">= </span><span class="s5">0</span>
+        <span class="s1">lines </span><span class="s3">= []</span>
+        <span class="s1">assert_lineno </span><span class="s3">= </span><span class="s2">None</span>
+        <span class="s1">seen_lines </span><span class="s3">= </span><span class="s1">set</span><span class="s3">()</span>
+
+    <span class="s1">tokens </span><span class="s3">= </span><span class="s1">tokenize</span><span class="s3">.</span><span class="s1">tokenize</span><span class="s3">(</span><span class="s1">io</span><span class="s3">.</span><span class="s1">BytesIO</span><span class="s3">(</span><span class="s1">src</span><span class="s3">).</span><span class="s1">readline</span><span class="s3">)</span>
+    <span class="s2">for </span><span class="s1">tp</span><span class="s3">, </span><span class="s1">source</span><span class="s3">, (</span><span class="s1">lineno</span><span class="s3">, </span><span class="s1">offset</span><span class="s3">), </span><span class="s1">_</span><span class="s3">, </span><span class="s1">line </span><span class="s2">in </span><span class="s1">tokens</span><span class="s3">:</span>
+        <span class="s2">if </span><span class="s1">tp </span><span class="s3">== </span><span class="s1">tokenize</span><span class="s3">.</span><span class="s1">NAME </span><span class="s2">and </span><span class="s1">source </span><span class="s3">== </span><span class="s6">&quot;assert&quot;</span><span class="s3">:</span>
+            <span class="s1">assert_lineno </span><span class="s3">= </span><span class="s1">lineno</span>
+        <span class="s2">elif </span><span class="s1">assert_lineno </span><span class="s2">is not None</span><span class="s3">:</span>
+            <span class="s4"># keep track of depth for the assert-message `,` lookup</span>
+            <span class="s2">if </span><span class="s1">tp </span><span class="s3">== </span><span class="s1">tokenize</span><span class="s3">.</span><span class="s1">OP </span><span class="s2">and </span><span class="s1">source </span><span class="s2">in </span><span class="s6">&quot;([{&quot;</span><span class="s3">:</span>
+                <span class="s1">depth </span><span class="s3">+= </span><span class="s5">1</span>
+            <span class="s2">elif </span><span class="s1">tp </span><span class="s3">== </span><span class="s1">tokenize</span><span class="s3">.</span><span class="s1">OP </span><span class="s2">and </span><span class="s1">source </span><span class="s2">in </span><span class="s6">&quot;)]}&quot;</span><span class="s3">:</span>
+                <span class="s1">depth </span><span class="s3">-= </span><span class="s5">1</span>
+
+            <span class="s2">if not </span><span class="s1">lines</span><span class="s3">:</span>
+                <span class="s1">lines</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">line</span><span class="s3">[</span><span class="s1">offset</span><span class="s3">:])</span>
+                <span class="s1">seen_lines</span><span class="s3">.</span><span class="s1">add</span><span class="s3">(</span><span class="s1">lineno</span><span class="s3">)</span>
+            <span class="s4"># a non-nested comma separates the expression from the message</span>
+            <span class="s2">elif </span><span class="s1">depth </span><span class="s3">== </span><span class="s5">0 </span><span class="s2">and </span><span class="s1">tp </span><span class="s3">== </span><span class="s1">tokenize</span><span class="s3">.</span><span class="s1">OP </span><span class="s2">and </span><span class="s1">source </span><span class="s3">== </span><span class="s6">&quot;,&quot;</span><span class="s3">:</span>
+                <span class="s4"># one line assert with message</span>
+                <span class="s2">if </span><span class="s1">lineno </span><span class="s2">in </span><span class="s1">seen_lines </span><span class="s2">and </span><span class="s1">len</span><span class="s3">(</span><span class="s1">lines</span><span class="s3">) == </span><span class="s5">1</span><span class="s3">:</span>
+                    <span class="s1">offset_in_trimmed </span><span class="s3">= </span><span class="s1">offset </span><span class="s3">+ </span><span class="s1">len</span><span class="s3">(</span><span class="s1">lines</span><span class="s3">[-</span><span class="s5">1</span><span class="s3">]) - </span><span class="s1">len</span><span class="s3">(</span><span class="s1">line</span><span class="s3">)</span>
+                    <span class="s1">lines</span><span class="s3">[-</span><span class="s5">1</span><span class="s3">] = </span><span class="s1">lines</span><span class="s3">[-</span><span class="s5">1</span><span class="s3">][:</span><span class="s1">offset_in_trimmed</span><span class="s3">]</span>
+                <span class="s4"># multi-line assert with message</span>
+                <span class="s2">elif </span><span class="s1">lineno </span><span class="s2">in </span><span class="s1">seen_lines</span><span class="s3">:</span>
+                    <span class="s1">lines</span><span class="s3">[-</span><span class="s5">1</span><span class="s3">] = </span><span class="s1">lines</span><span class="s3">[-</span><span class="s5">1</span><span class="s3">][:</span><span class="s1">offset</span><span class="s3">]</span>
+                <span class="s4"># multi line assert with escapd newline before message</span>
+                <span class="s2">else</span><span class="s3">:</span>
+                    <span class="s1">lines</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">line</span><span class="s3">[:</span><span class="s1">offset</span><span class="s3">])</span>
+                <span class="s1">_write_and_reset</span><span class="s3">()</span>
+            <span class="s2">elif </span><span class="s1">tp </span><span class="s2">in </span><span class="s3">{</span><span class="s1">tokenize</span><span class="s3">.</span><span class="s1">NEWLINE</span><span class="s3">, </span><span class="s1">tokenize</span><span class="s3">.</span><span class="s1">ENDMARKER</span><span class="s3">}:</span>
+                <span class="s1">_write_and_reset</span><span class="s3">()</span>
+            <span class="s2">elif </span><span class="s1">lines </span><span class="s2">and </span><span class="s1">lineno </span><span class="s2">not in </span><span class="s1">seen_lines</span><span class="s3">:</span>
+                <span class="s1">lines</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">line</span><span class="s3">)</span>
+                <span class="s1">seen_lines</span><span class="s3">.</span><span class="s1">add</span><span class="s3">(</span><span class="s1">lineno</span><span class="s3">)</span>
+
+    <span class="s2">return </span><span class="s1">ret</span>
+
+
+<span class="s2">class </span><span class="s1">AssertionRewriter</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">NodeVisitor</span><span class="s3">):</span>
+    <span class="s0">&quot;&quot;&quot;Assertion rewriting implementation. 
+ 
+    The main entrypoint is to call .run() with an ast.Module instance, 
+    this will then find all the assert statements and rewrite them to 
+    provide intermediate values and a detailed assertion error.  See 
+    http://pybites.blogspot.be/2011/07/behind-scenes-of-pytests-new-assertion.html 
+    for an overview of how this works. 
+ 
+    The entry point here is .run() which will iterate over all the 
+    statements in an ast.Module and for each ast.Assert statement it 
+    finds call .visit() with it.  Then .visit_Assert() takes over and 
+    is responsible for creating new ast statements to replace the 
+    original assert statement: it rewrites the test of an assertion 
+    to provide intermediate values and replace it with an if statement 
+    which raises an assertion error with a detailed explanation in 
+    case the expression is false and calls pytest_assertion_pass hook 
+    if expression is true. 
+ 
+    For this .visit_Assert() uses the visitor pattern to visit all the 
+    AST nodes of the ast.Assert.test field, each visit call returning 
+    an AST node and the corresponding explanation string.  During this 
+    state is kept in several instance attributes: 
+ 
+    :statements: All the AST statements which will replace the assert 
+       statement. 
+ 
+    :variables: This is populated by .variable() with each variable 
+       used by the statements so that they can all be set to None at 
+       the end of the statements. 
+ 
+    :variable_counter: Counter to create new unique variables needed 
+       by statements.  Variables are created using .variable() and 
+       have the form of &quot;@py_assert0&quot;. 
+ 
+    :expl_stmts: The AST statements which will be executed to get 
+       data from the assertion.  This is the code which will construct 
+       the detailed assertion message that is used in the AssertionError 
+       or for the pytest_assertion_pass hook. 
+ 
+    :explanation_specifiers: A dict filled by .explanation_param() 
+       with %-formatting placeholders and their corresponding 
+       expressions to use in the building of an assertion message. 
+       This is used by .pop_format_context() to build a message. 
+ 
+    :stack: A stack of the explanation_specifiers dicts maintained by 
+       .push_format_context() and .pop_format_context() which allows 
+       to build another %-formatted string while already building one. 
+ 
+    :variables_overwrite: A dict filled with references to variables 
+       that change value within an assert. This happens when a variable is 
+       reassigned with the walrus operator 
+ 
+    This state, except the variables_overwrite,  is reset on every new assert 
+    statement visited and used by the other visitors. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__</span><span class="s3">(</span>
+        <span class="s1">self</span><span class="s3">, </span><span class="s1">module_path</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">str</span><span class="s3">], </span><span class="s1">config</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">Config</span><span class="s3">], </span><span class="s1">source</span><span class="s3">: </span><span class="s1">bytes</span>
+    <span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">super</span><span class="s3">().</span><span class="s1">__init__</span><span class="s3">()</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">module_path </span><span class="s3">= </span><span class="s1">module_path</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">config </span><span class="s3">= </span><span class="s1">config</span>
+        <span class="s2">if </span><span class="s1">config </span><span class="s2">is not None</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">enable_assertion_pass_hook </span><span class="s3">= </span><span class="s1">config</span><span class="s3">.</span><span class="s1">getini</span><span class="s3">(</span>
+                <span class="s6">&quot;enable_assertion_pass_hook&quot;</span>
+            <span class="s3">)</span>
+        <span class="s2">else</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">enable_assertion_pass_hook </span><span class="s3">= </span><span class="s2">False</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">source </span><span class="s3">= </span><span class="s1">source</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">variables_overwrite</span><span class="s3">: </span><span class="s1">Dict</span><span class="s3">[</span><span class="s1">str</span><span class="s3">, </span><span class="s1">str</span><span class="s3">] = {}</span>
+
+    <span class="s2">def </span><span class="s1">run</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">mod</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Module</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Find all assert statements in *mod* and rewrite them.&quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">mod</span><span class="s3">.</span><span class="s1">body</span><span class="s3">:</span>
+            <span class="s4"># Nothing to do.</span>
+            <span class="s2">return</span>
+
+        <span class="s4"># We'll insert some special imports at the top of the module, but after any</span>
+        <span class="s4"># docstrings and __future__ imports, so first figure out where that is.</span>
+        <span class="s1">doc </span><span class="s3">= </span><span class="s1">getattr</span><span class="s3">(</span><span class="s1">mod</span><span class="s3">, </span><span class="s6">&quot;docstring&quot;</span><span class="s3">, </span><span class="s2">None</span><span class="s3">)</span>
+        <span class="s1">expect_docstring </span><span class="s3">= </span><span class="s1">doc </span><span class="s2">is None</span>
+        <span class="s2">if </span><span class="s1">doc </span><span class="s2">is not None and </span><span class="s1">self</span><span class="s3">.</span><span class="s1">is_rewrite_disabled</span><span class="s3">(</span><span class="s1">doc</span><span class="s3">):</span>
+            <span class="s2">return</span>
+        <span class="s1">pos </span><span class="s3">= </span><span class="s5">0</span>
+        <span class="s1">item </span><span class="s3">= </span><span class="s2">None</span>
+        <span class="s2">for </span><span class="s1">item </span><span class="s2">in </span><span class="s1">mod</span><span class="s3">.</span><span class="s1">body</span><span class="s3">:</span>
+            <span class="s2">if </span><span class="s3">(</span>
+                <span class="s1">expect_docstring</span>
+                <span class="s2">and </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">item</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Expr</span><span class="s3">)</span>
+                <span class="s2">and </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">item</span><span class="s3">.</span><span class="s1">value</span><span class="s3">, </span><span class="s1">astStr</span><span class="s3">)</span>
+            <span class="s3">):</span>
+                <span class="s2">if </span><span class="s1">sys</span><span class="s3">.</span><span class="s1">version_info </span><span class="s3">&gt;= (</span><span class="s5">3</span><span class="s3">, </span><span class="s5">8</span><span class="s3">):</span>
+                    <span class="s1">doc </span><span class="s3">= </span><span class="s1">item</span><span class="s3">.</span><span class="s1">value</span><span class="s3">.</span><span class="s1">value</span>
+                <span class="s2">else</span><span class="s3">:</span>
+                    <span class="s1">doc </span><span class="s3">= </span><span class="s1">item</span><span class="s3">.</span><span class="s1">value</span><span class="s3">.</span><span class="s1">s</span>
+                <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">is_rewrite_disabled</span><span class="s3">(</span><span class="s1">doc</span><span class="s3">):</span>
+                    <span class="s2">return</span>
+                <span class="s1">expect_docstring </span><span class="s3">= </span><span class="s2">False</span>
+            <span class="s2">elif </span><span class="s3">(</span>
+                <span class="s1">isinstance</span><span class="s3">(</span><span class="s1">item</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">ImportFrom</span><span class="s3">)</span>
+                <span class="s2">and </span><span class="s1">item</span><span class="s3">.</span><span class="s1">level </span><span class="s3">== </span><span class="s5">0</span>
+                <span class="s2">and </span><span class="s1">item</span><span class="s3">.</span><span class="s1">module </span><span class="s3">== </span><span class="s6">&quot;__future__&quot;</span>
+            <span class="s3">):</span>
+                <span class="s2">pass</span>
+            <span class="s2">else</span><span class="s3">:</span>
+                <span class="s2">break</span>
+            <span class="s1">pos </span><span class="s3">+= </span><span class="s5">1</span>
+        <span class="s4"># Special case: for a decorated function, set the lineno to that of the</span>
+        <span class="s4"># first decorator, not the `def`. Issue #4984.</span>
+        <span class="s2">if </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">item</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">FunctionDef</span><span class="s3">) </span><span class="s2">and </span><span class="s1">item</span><span class="s3">.</span><span class="s1">decorator_list</span><span class="s3">:</span>
+            <span class="s1">lineno </span><span class="s3">= </span><span class="s1">item</span><span class="s3">.</span><span class="s1">decorator_list</span><span class="s3">[</span><span class="s5">0</span><span class="s3">].</span><span class="s1">lineno</span>
+        <span class="s2">else</span><span class="s3">:</span>
+            <span class="s1">lineno </span><span class="s3">= </span><span class="s1">item</span><span class="s3">.</span><span class="s1">lineno</span>
+        <span class="s4"># Now actually insert the special imports.</span>
+        <span class="s2">if </span><span class="s1">sys</span><span class="s3">.</span><span class="s1">version_info </span><span class="s3">&gt;= (</span><span class="s5">3</span><span class="s3">, </span><span class="s5">10</span><span class="s3">):</span>
+            <span class="s1">aliases </span><span class="s3">= [</span>
+                <span class="s1">ast</span><span class="s3">.</span><span class="s1">alias</span><span class="s3">(</span><span class="s6">&quot;builtins&quot;</span><span class="s3">, </span><span class="s6">&quot;@py_builtins&quot;</span><span class="s3">, </span><span class="s1">lineno</span><span class="s3">=</span><span class="s1">lineno</span><span class="s3">, </span><span class="s1">col_offset</span><span class="s3">=</span><span class="s5">0</span><span class="s3">),</span>
+                <span class="s1">ast</span><span class="s3">.</span><span class="s1">alias</span><span class="s3">(</span>
+                    <span class="s6">&quot;_pytest.assertion.rewrite&quot;</span><span class="s3">,</span>
+                    <span class="s6">&quot;@pytest_ar&quot;</span><span class="s3">,</span>
+                    <span class="s1">lineno</span><span class="s3">=</span><span class="s1">lineno</span><span class="s3">,</span>
+                    <span class="s1">col_offset</span><span class="s3">=</span><span class="s5">0</span><span class="s3">,</span>
+                <span class="s3">),</span>
+            <span class="s3">]</span>
+        <span class="s2">else</span><span class="s3">:</span>
+            <span class="s1">aliases </span><span class="s3">= [</span>
+                <span class="s1">ast</span><span class="s3">.</span><span class="s1">alias</span><span class="s3">(</span><span class="s6">&quot;builtins&quot;</span><span class="s3">, </span><span class="s6">&quot;@py_builtins&quot;</span><span class="s3">),</span>
+                <span class="s1">ast</span><span class="s3">.</span><span class="s1">alias</span><span class="s3">(</span><span class="s6">&quot;_pytest.assertion.rewrite&quot;</span><span class="s3">, </span><span class="s6">&quot;@pytest_ar&quot;</span><span class="s3">),</span>
+            <span class="s3">]</span>
+        <span class="s1">imports </span><span class="s3">= [</span>
+            <span class="s1">ast</span><span class="s3">.</span><span class="s1">Import</span><span class="s3">([</span><span class="s1">alias</span><span class="s3">], </span><span class="s1">lineno</span><span class="s3">=</span><span class="s1">lineno</span><span class="s3">, </span><span class="s1">col_offset</span><span class="s3">=</span><span class="s5">0</span><span class="s3">) </span><span class="s2">for </span><span class="s1">alias </span><span class="s2">in </span><span class="s1">aliases</span>
+        <span class="s3">]</span>
+        <span class="s1">mod</span><span class="s3">.</span><span class="s1">body</span><span class="s3">[</span><span class="s1">pos</span><span class="s3">:</span><span class="s1">pos</span><span class="s3">] = </span><span class="s1">imports</span>
+
+        <span class="s4"># Collect asserts.</span>
+        <span class="s1">nodes</span><span class="s3">: </span><span class="s1">List</span><span class="s3">[</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">AST</span><span class="s3">] = [</span><span class="s1">mod</span><span class="s3">]</span>
+        <span class="s2">while </span><span class="s1">nodes</span><span class="s3">:</span>
+            <span class="s1">node </span><span class="s3">= </span><span class="s1">nodes</span><span class="s3">.</span><span class="s1">pop</span><span class="s3">()</span>
+            <span class="s2">for </span><span class="s1">name</span><span class="s3">, </span><span class="s1">field </span><span class="s2">in </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">iter_fields</span><span class="s3">(</span><span class="s1">node</span><span class="s3">):</span>
+                <span class="s2">if </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">field</span><span class="s3">, </span><span class="s1">list</span><span class="s3">):</span>
+                    <span class="s1">new</span><span class="s3">: </span><span class="s1">List</span><span class="s3">[</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">AST</span><span class="s3">] = []</span>
+                    <span class="s2">for </span><span class="s1">i</span><span class="s3">, </span><span class="s1">child </span><span class="s2">in </span><span class="s1">enumerate</span><span class="s3">(</span><span class="s1">field</span><span class="s3">):</span>
+                        <span class="s2">if </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">child</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Assert</span><span class="s3">):</span>
+                            <span class="s4"># Transform assert.</span>
+                            <span class="s1">new</span><span class="s3">.</span><span class="s1">extend</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">visit</span><span class="s3">(</span><span class="s1">child</span><span class="s3">))</span>
+                        <span class="s2">else</span><span class="s3">:</span>
+                            <span class="s1">new</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">child</span><span class="s3">)</span>
+                            <span class="s2">if </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">child</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">AST</span><span class="s3">):</span>
+                                <span class="s1">nodes</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">child</span><span class="s3">)</span>
+                    <span class="s1">setattr</span><span class="s3">(</span><span class="s1">node</span><span class="s3">, </span><span class="s1">name</span><span class="s3">, </span><span class="s1">new</span><span class="s3">)</span>
+                <span class="s2">elif </span><span class="s3">(</span>
+                    <span class="s1">isinstance</span><span class="s3">(</span><span class="s1">field</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">AST</span><span class="s3">)</span>
+                    <span class="s4"># Don't recurse into expressions as they can't contain</span>
+                    <span class="s4"># asserts.</span>
+                    <span class="s2">and not </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">field</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">expr</span><span class="s3">)</span>
+                <span class="s3">):</span>
+                    <span class="s1">nodes</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">field</span><span class="s3">)</span>
+
+    <span class="s3">@</span><span class="s1">staticmethod</span>
+    <span class="s2">def </span><span class="s1">is_rewrite_disabled</span><span class="s3">(</span><span class="s1">docstring</span><span class="s3">: </span><span class="s1">str</span><span class="s3">) </span><span class="s1">-&gt; bool</span><span class="s3">:</span>
+        <span class="s2">return </span><span class="s6">&quot;PYTEST_DONT_REWRITE&quot; </span><span class="s2">in </span><span class="s1">docstring</span>
+
+    <span class="s2">def </span><span class="s1">variable</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Get a new variable.&quot;&quot;&quot;</span>
+        <span class="s4"># Use a character invalid in python identifiers to avoid clashing.</span>
+        <span class="s1">name </span><span class="s3">= </span><span class="s6">&quot;@py_assert&quot; </span><span class="s3">+ </span><span class="s1">str</span><span class="s3">(</span><span class="s1">next</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">variable_counter</span><span class="s3">))</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">variables</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">name</span><span class="s3">)</span>
+        <span class="s2">return </span><span class="s1">name</span>
+
+    <span class="s2">def </span><span class="s1">assign</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">expr</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">expr</span><span class="s3">) </span><span class="s1">-&gt; ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Give *expr* a name.&quot;&quot;&quot;</span>
+        <span class="s1">name </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">variable</span><span class="s3">()</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">statements</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Assign</span><span class="s3">([</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">(</span><span class="s1">name</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Store</span><span class="s3">())], </span><span class="s1">expr</span><span class="s3">))</span>
+        <span class="s2">return </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">(</span><span class="s1">name</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Load</span><span class="s3">())</span>
+
+    <span class="s2">def </span><span class="s1">display</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">expr</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">expr</span><span class="s3">) </span><span class="s1">-&gt; ast</span><span class="s3">.</span><span class="s1">expr</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Call saferepr on the expression.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">helper</span><span class="s3">(</span><span class="s6">&quot;_saferepr&quot;</span><span class="s3">, </span><span class="s1">expr</span><span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">helper</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">name</span><span class="s3">: </span><span class="s1">str</span><span class="s3">, *</span><span class="s1">args</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">expr</span><span class="s3">) </span><span class="s1">-&gt; ast</span><span class="s3">.</span><span class="s1">expr</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Call a helper in this module.&quot;&quot;&quot;</span>
+        <span class="s1">py_name </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">(</span><span class="s6">&quot;@pytest_ar&quot;</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Load</span><span class="s3">())</span>
+        <span class="s1">attr </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Attribute</span><span class="s3">(</span><span class="s1">py_name</span><span class="s3">, </span><span class="s1">name</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Load</span><span class="s3">())</span>
+        <span class="s2">return </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Call</span><span class="s3">(</span><span class="s1">attr</span><span class="s3">, </span><span class="s1">list</span><span class="s3">(</span><span class="s1">args</span><span class="s3">), [])</span>
+
+    <span class="s2">def </span><span class="s1">builtin</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">name</span><span class="s3">: </span><span class="s1">str</span><span class="s3">) </span><span class="s1">-&gt; ast</span><span class="s3">.</span><span class="s1">Attribute</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Return the builtin called *name*.&quot;&quot;&quot;</span>
+        <span class="s1">builtin_name </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">(</span><span class="s6">&quot;@py_builtins&quot;</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Load</span><span class="s3">())</span>
+        <span class="s2">return </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Attribute</span><span class="s3">(</span><span class="s1">builtin_name</span><span class="s3">, </span><span class="s1">name</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Load</span><span class="s3">())</span>
+
+    <span class="s2">def </span><span class="s1">explanation_param</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">expr</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">expr</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Return a new named %-formatting placeholder for expr. 
+ 
+        This creates a %-formatting placeholder for expr in the 
+        current formatting context, e.g. ``%(py0)s``.  The placeholder 
+        and expr are placed in the current format context so that it 
+        can be used on the next call to .pop_format_context(). 
+        &quot;&quot;&quot;</span>
+        <span class="s1">specifier </span><span class="s3">= </span><span class="s6">&quot;py&quot; </span><span class="s3">+ </span><span class="s1">str</span><span class="s3">(</span><span class="s1">next</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">variable_counter</span><span class="s3">))</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">explanation_specifiers</span><span class="s3">[</span><span class="s1">specifier</span><span class="s3">] = </span><span class="s1">expr</span>
+        <span class="s2">return </span><span class="s6">&quot;%(&quot; </span><span class="s3">+ </span><span class="s1">specifier </span><span class="s3">+ </span><span class="s6">&quot;)s&quot;</span>
+
+    <span class="s2">def </span><span class="s1">push_format_context</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Create a new formatting context. 
+ 
+        The format context is used for when an explanation wants to 
+        have a variable value formatted in the assertion message.  In 
+        this case the value required can be added using 
+        .explanation_param().  Finally .pop_format_context() is used 
+        to format a string of %-formatted values as added by 
+        .explanation_param(). 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">explanation_specifiers</span><span class="s3">: </span><span class="s1">Dict</span><span class="s3">[</span><span class="s1">str</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">expr</span><span class="s3">] = {}</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">stack</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">explanation_specifiers</span><span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">pop_format_context</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">expl_expr</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">expr</span><span class="s3">) </span><span class="s1">-&gt; ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Format the %-formatted string with current format context. 
+ 
+        The expl_expr should be an str ast.expr instance constructed from 
+        the %-placeholders created by .explanation_param().  This will 
+        add the required code to format said string to .expl_stmts and 
+        return the ast.Name instance of the formatted string. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">current </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">stack</span><span class="s3">.</span><span class="s1">pop</span><span class="s3">()</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">stack</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">explanation_specifiers </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">stack</span><span class="s3">[-</span><span class="s5">1</span><span class="s3">]</span>
+        <span class="s1">keys </span><span class="s3">= [</span><span class="s1">astStr</span><span class="s3">(</span><span class="s1">key</span><span class="s3">) </span><span class="s2">for </span><span class="s1">key </span><span class="s2">in </span><span class="s1">current</span><span class="s3">.</span><span class="s1">keys</span><span class="s3">()]</span>
+        <span class="s1">format_dict </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Dict</span><span class="s3">(</span><span class="s1">keys</span><span class="s3">, </span><span class="s1">list</span><span class="s3">(</span><span class="s1">current</span><span class="s3">.</span><span class="s1">values</span><span class="s3">()))</span>
+        <span class="s1">form </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">BinOp</span><span class="s3">(</span><span class="s1">expl_expr</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Mod</span><span class="s3">(), </span><span class="s1">format_dict</span><span class="s3">)</span>
+        <span class="s1">name </span><span class="s3">= </span><span class="s6">&quot;@py_format&quot; </span><span class="s3">+ </span><span class="s1">str</span><span class="s3">(</span><span class="s1">next</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">variable_counter</span><span class="s3">))</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">enable_assertion_pass_hook</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">format_variables</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">name</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">expl_stmts</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Assign</span><span class="s3">([</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">(</span><span class="s1">name</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Store</span><span class="s3">())], </span><span class="s1">form</span><span class="s3">))</span>
+        <span class="s2">return </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">(</span><span class="s1">name</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Load</span><span class="s3">())</span>
+
+    <span class="s2">def </span><span class="s1">generic_visit</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">node</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">AST</span><span class="s3">) </span><span class="s1">-&gt; Tuple</span><span class="s3">[</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">, </span><span class="s1">str</span><span class="s3">]:</span>
+        <span class="s0">&quot;&quot;&quot;Handle expressions we don't have custom code for.&quot;&quot;&quot;</span>
+        <span class="s2">assert </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">node</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">expr</span><span class="s3">)</span>
+        <span class="s1">res </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">assign</span><span class="s3">(</span><span class="s1">node</span><span class="s3">)</span>
+        <span class="s2">return </span><span class="s1">res</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">explanation_param</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">display</span><span class="s3">(</span><span class="s1">res</span><span class="s3">))</span>
+
+    <span class="s2">def </span><span class="s1">visit_Assert</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">assert_</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Assert</span><span class="s3">) </span><span class="s1">-&gt; List</span><span class="s3">[</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">stmt</span><span class="s3">]:</span>
+        <span class="s0">&quot;&quot;&quot;Return the AST statements to replace the ast.Assert instance. 
+ 
+        This rewrites the test of an assertion to provide 
+        intermediate values and replace it with an if statement which 
+        raises an assertion error with a detailed explanation in case 
+        the expression is false. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">assert_</span><span class="s3">.</span><span class="s1">test</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Tuple</span><span class="s3">) </span><span class="s2">and </span><span class="s1">len</span><span class="s3">(</span><span class="s1">assert_</span><span class="s3">.</span><span class="s1">test</span><span class="s3">.</span><span class="s1">elts</span><span class="s3">) &gt;= </span><span class="s5">1</span><span class="s3">:</span>
+            <span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">warning_types </span><span class="s2">import </span><span class="s1">PytestAssertRewriteWarning</span>
+            <span class="s2">import </span><span class="s1">warnings</span>
+
+            <span class="s4"># TODO: This assert should not be needed.</span>
+            <span class="s2">assert </span><span class="s1">self</span><span class="s3">.</span><span class="s1">module_path </span><span class="s2">is not None</span>
+            <span class="s1">warnings</span><span class="s3">.</span><span class="s1">warn_explicit</span><span class="s3">(</span>
+                <span class="s1">PytestAssertRewriteWarning</span><span class="s3">(</span>
+                    <span class="s6">&quot;assertion is always true, perhaps remove parentheses?&quot;</span>
+                <span class="s3">),</span>
+                <span class="s1">category</span><span class="s3">=</span><span class="s2">None</span><span class="s3">,</span>
+                <span class="s1">filename</span><span class="s3">=</span><span class="s1">self</span><span class="s3">.</span><span class="s1">module_path</span><span class="s3">,</span>
+                <span class="s1">lineno</span><span class="s3">=</span><span class="s1">assert_</span><span class="s3">.</span><span class="s1">lineno</span><span class="s3">,</span>
+            <span class="s3">)</span>
+
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">statements</span><span class="s3">: </span><span class="s1">List</span><span class="s3">[</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">stmt</span><span class="s3">] = []</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">variables</span><span class="s3">: </span><span class="s1">List</span><span class="s3">[</span><span class="s1">str</span><span class="s3">] = []</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">variable_counter </span><span class="s3">= </span><span class="s1">itertools</span><span class="s3">.</span><span class="s1">count</span><span class="s3">()</span>
+
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">enable_assertion_pass_hook</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">format_variables</span><span class="s3">: </span><span class="s1">List</span><span class="s3">[</span><span class="s1">str</span><span class="s3">] = []</span>
+
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">stack</span><span class="s3">: </span><span class="s1">List</span><span class="s3">[</span><span class="s1">Dict</span><span class="s3">[</span><span class="s1">str</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">expr</span><span class="s3">]] = []</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">expl_stmts</span><span class="s3">: </span><span class="s1">List</span><span class="s3">[</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">stmt</span><span class="s3">] = []</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">push_format_context</span><span class="s3">()</span>
+        <span class="s4"># Rewrite assert into a bunch of statements.</span>
+        <span class="s1">top_condition</span><span class="s3">, </span><span class="s1">explanation </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">visit</span><span class="s3">(</span><span class="s1">assert_</span><span class="s3">.</span><span class="s1">test</span><span class="s3">)</span>
+
+        <span class="s1">negation </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">UnaryOp</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Not</span><span class="s3">(), </span><span class="s1">top_condition</span><span class="s3">)</span>
+
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">enable_assertion_pass_hook</span><span class="s3">:  </span><span class="s4"># Experimental pytest_assertion_pass hook</span>
+            <span class="s1">msg </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">pop_format_context</span><span class="s3">(</span><span class="s1">astStr</span><span class="s3">(</span><span class="s1">explanation</span><span class="s3">))</span>
+
+            <span class="s4"># Failed</span>
+            <span class="s2">if </span><span class="s1">assert_</span><span class="s3">.</span><span class="s1">msg</span><span class="s3">:</span>
+                <span class="s1">assertmsg </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">helper</span><span class="s3">(</span><span class="s6">&quot;_format_assertmsg&quot;</span><span class="s3">, </span><span class="s1">assert_</span><span class="s3">.</span><span class="s1">msg</span><span class="s3">)</span>
+                <span class="s1">gluestr </span><span class="s3">= </span><span class="s6">&quot;</span><span class="s2">\n</span><span class="s6">&gt;assert &quot;</span>
+            <span class="s2">else</span><span class="s3">:</span>
+                <span class="s1">assertmsg </span><span class="s3">= </span><span class="s1">astStr</span><span class="s3">(</span><span class="s6">&quot;&quot;</span><span class="s3">)</span>
+                <span class="s1">gluestr </span><span class="s3">= </span><span class="s6">&quot;assert &quot;</span>
+            <span class="s1">err_explanation </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">BinOp</span><span class="s3">(</span><span class="s1">astStr</span><span class="s3">(</span><span class="s1">gluestr</span><span class="s3">), </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Add</span><span class="s3">(), </span><span class="s1">msg</span><span class="s3">)</span>
+            <span class="s1">err_msg </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">BinOp</span><span class="s3">(</span><span class="s1">assertmsg</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Add</span><span class="s3">(), </span><span class="s1">err_explanation</span><span class="s3">)</span>
+            <span class="s1">err_name </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">(</span><span class="s6">&quot;AssertionError&quot;</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Load</span><span class="s3">())</span>
+            <span class="s1">fmt </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">helper</span><span class="s3">(</span><span class="s6">&quot;_format_explanation&quot;</span><span class="s3">, </span><span class="s1">err_msg</span><span class="s3">)</span>
+            <span class="s1">exc </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Call</span><span class="s3">(</span><span class="s1">err_name</span><span class="s3">, [</span><span class="s1">fmt</span><span class="s3">], [])</span>
+            <span class="s1">raise_ </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Raise</span><span class="s3">(</span><span class="s1">exc</span><span class="s3">, </span><span class="s2">None</span><span class="s3">)</span>
+            <span class="s1">statements_fail </span><span class="s3">= []</span>
+            <span class="s1">statements_fail</span><span class="s3">.</span><span class="s1">extend</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">expl_stmts</span><span class="s3">)</span>
+            <span class="s1">statements_fail</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">raise_</span><span class="s3">)</span>
+
+            <span class="s4"># Passed</span>
+            <span class="s1">fmt_pass </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">helper</span><span class="s3">(</span><span class="s6">&quot;_format_explanation&quot;</span><span class="s3">, </span><span class="s1">msg</span><span class="s3">)</span>
+            <span class="s1">orig </span><span class="s3">= </span><span class="s1">_get_assertion_exprs</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">source</span><span class="s3">)[</span><span class="s1">assert_</span><span class="s3">.</span><span class="s1">lineno</span><span class="s3">]</span>
+            <span class="s1">hook_call_pass </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Expr</span><span class="s3">(</span>
+                <span class="s1">self</span><span class="s3">.</span><span class="s1">helper</span><span class="s3">(</span>
+                    <span class="s6">&quot;_call_assertion_pass&quot;</span><span class="s3">,</span>
+                    <span class="s1">astNum</span><span class="s3">(</span><span class="s1">assert_</span><span class="s3">.</span><span class="s1">lineno</span><span class="s3">),</span>
+                    <span class="s1">astStr</span><span class="s3">(</span><span class="s1">orig</span><span class="s3">),</span>
+                    <span class="s1">fmt_pass</span><span class="s3">,</span>
+                <span class="s3">)</span>
+            <span class="s3">)</span>
+            <span class="s4"># If any hooks implement assert_pass hook</span>
+            <span class="s1">hook_impl_test </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">If</span><span class="s3">(</span>
+                <span class="s1">self</span><span class="s3">.</span><span class="s1">helper</span><span class="s3">(</span><span class="s6">&quot;_check_if_assertion_pass_impl&quot;</span><span class="s3">),</span>
+                <span class="s1">self</span><span class="s3">.</span><span class="s1">expl_stmts </span><span class="s3">+ [</span><span class="s1">hook_call_pass</span><span class="s3">],</span>
+                <span class="s3">[],</span>
+            <span class="s3">)</span>
+            <span class="s1">statements_pass </span><span class="s3">= [</span><span class="s1">hook_impl_test</span><span class="s3">]</span>
+
+            <span class="s4"># Test for assertion condition</span>
+            <span class="s1">main_test </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">If</span><span class="s3">(</span><span class="s1">negation</span><span class="s3">, </span><span class="s1">statements_fail</span><span class="s3">, </span><span class="s1">statements_pass</span><span class="s3">)</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">statements</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">main_test</span><span class="s3">)</span>
+            <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">format_variables</span><span class="s3">:</span>
+                <span class="s1">variables </span><span class="s3">= [</span>
+                    <span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">(</span><span class="s1">name</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Store</span><span class="s3">()) </span><span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">self</span><span class="s3">.</span><span class="s1">format_variables</span>
+                <span class="s3">]</span>
+                <span class="s1">clear_format </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Assign</span><span class="s3">(</span><span class="s1">variables</span><span class="s3">, </span><span class="s1">astNameConstant</span><span class="s3">(</span><span class="s2">None</span><span class="s3">))</span>
+                <span class="s1">self</span><span class="s3">.</span><span class="s1">statements</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">clear_format</span><span class="s3">)</span>
+
+        <span class="s2">else</span><span class="s3">:  </span><span class="s4"># Original assertion rewriting</span>
+            <span class="s4"># Create failure message.</span>
+            <span class="s1">body </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">expl_stmts</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">statements</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">If</span><span class="s3">(</span><span class="s1">negation</span><span class="s3">, </span><span class="s1">body</span><span class="s3">, []))</span>
+            <span class="s2">if </span><span class="s1">assert_</span><span class="s3">.</span><span class="s1">msg</span><span class="s3">:</span>
+                <span class="s1">assertmsg </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">helper</span><span class="s3">(</span><span class="s6">&quot;_format_assertmsg&quot;</span><span class="s3">, </span><span class="s1">assert_</span><span class="s3">.</span><span class="s1">msg</span><span class="s3">)</span>
+                <span class="s1">explanation </span><span class="s3">= </span><span class="s6">&quot;</span><span class="s2">\n</span><span class="s6">&gt;assert &quot; </span><span class="s3">+ </span><span class="s1">explanation</span>
+            <span class="s2">else</span><span class="s3">:</span>
+                <span class="s1">assertmsg </span><span class="s3">= </span><span class="s1">astStr</span><span class="s3">(</span><span class="s6">&quot;&quot;</span><span class="s3">)</span>
+                <span class="s1">explanation </span><span class="s3">= </span><span class="s6">&quot;assert &quot; </span><span class="s3">+ </span><span class="s1">explanation</span>
+            <span class="s1">template </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">BinOp</span><span class="s3">(</span><span class="s1">assertmsg</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Add</span><span class="s3">(), </span><span class="s1">astStr</span><span class="s3">(</span><span class="s1">explanation</span><span class="s3">))</span>
+            <span class="s1">msg </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">pop_format_context</span><span class="s3">(</span><span class="s1">template</span><span class="s3">)</span>
+            <span class="s1">fmt </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">helper</span><span class="s3">(</span><span class="s6">&quot;_format_explanation&quot;</span><span class="s3">, </span><span class="s1">msg</span><span class="s3">)</span>
+            <span class="s1">err_name </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">(</span><span class="s6">&quot;AssertionError&quot;</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Load</span><span class="s3">())</span>
+            <span class="s1">exc </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Call</span><span class="s3">(</span><span class="s1">err_name</span><span class="s3">, [</span><span class="s1">fmt</span><span class="s3">], [])</span>
+            <span class="s1">raise_ </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Raise</span><span class="s3">(</span><span class="s1">exc</span><span class="s3">, </span><span class="s2">None</span><span class="s3">)</span>
+
+            <span class="s1">body</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">raise_</span><span class="s3">)</span>
+
+        <span class="s4"># Clear temporary variables by setting them to None.</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">variables</span><span class="s3">:</span>
+            <span class="s1">variables </span><span class="s3">= [</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">(</span><span class="s1">name</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Store</span><span class="s3">()) </span><span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">self</span><span class="s3">.</span><span class="s1">variables</span><span class="s3">]</span>
+            <span class="s1">clear </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Assign</span><span class="s3">(</span><span class="s1">variables</span><span class="s3">, </span><span class="s1">astNameConstant</span><span class="s3">(</span><span class="s2">None</span><span class="s3">))</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">statements</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">clear</span><span class="s3">)</span>
+        <span class="s4"># Fix locations (line numbers/column offsets).</span>
+        <span class="s2">for </span><span class="s1">stmt </span><span class="s2">in </span><span class="s1">self</span><span class="s3">.</span><span class="s1">statements</span><span class="s3">:</span>
+            <span class="s2">for </span><span class="s1">node </span><span class="s2">in </span><span class="s1">traverse_node</span><span class="s3">(</span><span class="s1">stmt</span><span class="s3">):</span>
+                <span class="s1">ast</span><span class="s3">.</span><span class="s1">copy_location</span><span class="s3">(</span><span class="s1">node</span><span class="s3">, </span><span class="s1">assert_</span><span class="s3">)</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">statements</span>
+
+    <span class="s2">def </span><span class="s1">visit_NamedExpr</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">name</span><span class="s3">: </span><span class="s1">namedExpr</span><span class="s3">) </span><span class="s1">-&gt; Tuple</span><span class="s3">[</span><span class="s1">namedExpr</span><span class="s3">, </span><span class="s1">str</span><span class="s3">]:</span>
+        <span class="s4"># This method handles the 'walrus operator' repr of the target</span>
+        <span class="s4"># name if it's a local variable or _should_repr_global_name()</span>
+        <span class="s4"># thinks it's acceptable.</span>
+        <span class="s1">locs </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Call</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">builtin</span><span class="s3">(</span><span class="s6">&quot;locals&quot;</span><span class="s3">), [], [])</span>
+        <span class="s1">target_id </span><span class="s3">= </span><span class="s1">name</span><span class="s3">.</span><span class="s1">target</span><span class="s3">.</span><span class="s1">id  </span><span class="s4"># type: ignore[attr-defined]</span>
+        <span class="s1">inlocs </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Compare</span><span class="s3">(</span><span class="s1">astStr</span><span class="s3">(</span><span class="s1">target_id</span><span class="s3">), [</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">In</span><span class="s3">()], [</span><span class="s1">locs</span><span class="s3">])</span>
+        <span class="s1">dorepr </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">helper</span><span class="s3">(</span><span class="s6">&quot;_should_repr_global_name&quot;</span><span class="s3">, </span><span class="s1">name</span><span class="s3">)</span>
+        <span class="s1">test </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">BoolOp</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Or</span><span class="s3">(), [</span><span class="s1">inlocs</span><span class="s3">, </span><span class="s1">dorepr</span><span class="s3">])</span>
+        <span class="s1">expr </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">IfExp</span><span class="s3">(</span><span class="s1">test</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">display</span><span class="s3">(</span><span class="s1">name</span><span class="s3">), </span><span class="s1">astStr</span><span class="s3">(</span><span class="s1">target_id</span><span class="s3">))</span>
+        <span class="s2">return </span><span class="s1">name</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">explanation_param</span><span class="s3">(</span><span class="s1">expr</span><span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">visit_Name</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">name</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">) </span><span class="s1">-&gt; Tuple</span><span class="s3">[</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">, </span><span class="s1">str</span><span class="s3">]:</span>
+        <span class="s4"># Display the repr of the name if it's a local variable or</span>
+        <span class="s4"># _should_repr_global_name() thinks it's acceptable.</span>
+        <span class="s1">locs </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Call</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">builtin</span><span class="s3">(</span><span class="s6">&quot;locals&quot;</span><span class="s3">), [], [])</span>
+        <span class="s1">inlocs </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Compare</span><span class="s3">(</span><span class="s1">astStr</span><span class="s3">(</span><span class="s1">name</span><span class="s3">.</span><span class="s1">id</span><span class="s3">), [</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">In</span><span class="s3">()], [</span><span class="s1">locs</span><span class="s3">])</span>
+        <span class="s1">dorepr </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">helper</span><span class="s3">(</span><span class="s6">&quot;_should_repr_global_name&quot;</span><span class="s3">, </span><span class="s1">name</span><span class="s3">)</span>
+        <span class="s1">test </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">BoolOp</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Or</span><span class="s3">(), [</span><span class="s1">inlocs</span><span class="s3">, </span><span class="s1">dorepr</span><span class="s3">])</span>
+        <span class="s1">expr </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">IfExp</span><span class="s3">(</span><span class="s1">test</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">display</span><span class="s3">(</span><span class="s1">name</span><span class="s3">), </span><span class="s1">astStr</span><span class="s3">(</span><span class="s1">name</span><span class="s3">.</span><span class="s1">id</span><span class="s3">))</span>
+        <span class="s2">return </span><span class="s1">name</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">explanation_param</span><span class="s3">(</span><span class="s1">expr</span><span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">visit_BoolOp</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">boolop</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">BoolOp</span><span class="s3">) </span><span class="s1">-&gt; Tuple</span><span class="s3">[</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">, </span><span class="s1">str</span><span class="s3">]:</span>
+        <span class="s1">res_var </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">variable</span><span class="s3">()</span>
+        <span class="s1">expl_list </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">assign</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">List</span><span class="s3">([], </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Load</span><span class="s3">()))</span>
+        <span class="s1">app </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Attribute</span><span class="s3">(</span><span class="s1">expl_list</span><span class="s3">, </span><span class="s6">&quot;append&quot;</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Load</span><span class="s3">())</span>
+        <span class="s1">is_or </span><span class="s3">= </span><span class="s1">int</span><span class="s3">(</span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">boolop</span><span class="s3">.</span><span class="s1">op</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Or</span><span class="s3">))</span>
+        <span class="s1">body </span><span class="s3">= </span><span class="s1">save </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">statements</span>
+        <span class="s1">fail_save </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">expl_stmts</span>
+        <span class="s1">levels </span><span class="s3">= </span><span class="s1">len</span><span class="s3">(</span><span class="s1">boolop</span><span class="s3">.</span><span class="s1">values</span><span class="s3">) - </span><span class="s5">1</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">push_format_context</span><span class="s3">()</span>
+        <span class="s4"># Process each operand, short-circuiting if needed.</span>
+        <span class="s2">for </span><span class="s1">i</span><span class="s3">, </span><span class="s1">v </span><span class="s2">in </span><span class="s1">enumerate</span><span class="s3">(</span><span class="s1">boolop</span><span class="s3">.</span><span class="s1">values</span><span class="s3">):</span>
+            <span class="s2">if </span><span class="s1">i</span><span class="s3">:</span>
+                <span class="s1">fail_inner</span><span class="s3">: </span><span class="s1">List</span><span class="s3">[</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">stmt</span><span class="s3">] = []</span>
+                <span class="s4"># cond is set in a prior loop iteration below</span>
+                <span class="s1">self</span><span class="s3">.</span><span class="s1">expl_stmts</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">If</span><span class="s3">(</span><span class="s1">cond</span><span class="s3">, </span><span class="s1">fail_inner</span><span class="s3">, []))  </span><span class="s4"># noqa</span>
+                <span class="s1">self</span><span class="s3">.</span><span class="s1">expl_stmts </span><span class="s3">= </span><span class="s1">fail_inner</span>
+                <span class="s4"># Check if the left operand is a namedExpr and the value has already been visited</span>
+                <span class="s2">if </span><span class="s3">(</span>
+                    <span class="s1">isinstance</span><span class="s3">(</span><span class="s1">v</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Compare</span><span class="s3">)</span>
+                    <span class="s2">and </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">v</span><span class="s3">.</span><span class="s1">left</span><span class="s3">, </span><span class="s1">namedExpr</span><span class="s3">)</span>
+                    <span class="s2">and </span><span class="s1">v</span><span class="s3">.</span><span class="s1">left</span><span class="s3">.</span><span class="s1">target</span><span class="s3">.</span><span class="s1">id</span>
+                    <span class="s2">in </span><span class="s3">[</span>
+                        <span class="s1">ast_expr</span><span class="s3">.</span><span class="s1">id</span>
+                        <span class="s2">for </span><span class="s1">ast_expr </span><span class="s2">in </span><span class="s1">boolop</span><span class="s3">.</span><span class="s1">values</span><span class="s3">[:</span><span class="s1">i</span><span class="s3">]</span>
+                        <span class="s2">if </span><span class="s1">hasattr</span><span class="s3">(</span><span class="s1">ast_expr</span><span class="s3">, </span><span class="s6">&quot;id&quot;</span><span class="s3">)</span>
+                    <span class="s3">]</span>
+                <span class="s3">):</span>
+                    <span class="s1">pytest_temp </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">variable</span><span class="s3">()</span>
+                    <span class="s1">self</span><span class="s3">.</span><span class="s1">variables_overwrite</span><span class="s3">[</span>
+                        <span class="s1">v</span><span class="s3">.</span><span class="s1">left</span><span class="s3">.</span><span class="s1">target</span><span class="s3">.</span><span class="s1">id</span>
+                    <span class="s3">] = </span><span class="s1">v</span><span class="s3">.</span><span class="s1">left  </span><span class="s4"># type:ignore[assignment]</span>
+                    <span class="s1">v</span><span class="s3">.</span><span class="s1">left</span><span class="s3">.</span><span class="s1">target</span><span class="s3">.</span><span class="s1">id </span><span class="s3">= </span><span class="s1">pytest_temp</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">push_format_context</span><span class="s3">()</span>
+            <span class="s1">res</span><span class="s3">, </span><span class="s1">expl </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">visit</span><span class="s3">(</span><span class="s1">v</span><span class="s3">)</span>
+            <span class="s1">body</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Assign</span><span class="s3">([</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">(</span><span class="s1">res_var</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Store</span><span class="s3">())], </span><span class="s1">res</span><span class="s3">))</span>
+            <span class="s1">expl_format </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">pop_format_context</span><span class="s3">(</span><span class="s1">astStr</span><span class="s3">(</span><span class="s1">expl</span><span class="s3">))</span>
+            <span class="s1">call </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Call</span><span class="s3">(</span><span class="s1">app</span><span class="s3">, [</span><span class="s1">expl_format</span><span class="s3">], [])</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">expl_stmts</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Expr</span><span class="s3">(</span><span class="s1">call</span><span class="s3">))</span>
+            <span class="s2">if </span><span class="s1">i </span><span class="s3">&lt; </span><span class="s1">levels</span><span class="s3">:</span>
+                <span class="s1">cond</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">expr </span><span class="s3">= </span><span class="s1">res</span>
+                <span class="s2">if </span><span class="s1">is_or</span><span class="s3">:</span>
+                    <span class="s1">cond </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">UnaryOp</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Not</span><span class="s3">(), </span><span class="s1">cond</span><span class="s3">)</span>
+                <span class="s1">inner</span><span class="s3">: </span><span class="s1">List</span><span class="s3">[</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">stmt</span><span class="s3">] = []</span>
+                <span class="s1">self</span><span class="s3">.</span><span class="s1">statements</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">If</span><span class="s3">(</span><span class="s1">cond</span><span class="s3">, </span><span class="s1">inner</span><span class="s3">, []))</span>
+                <span class="s1">self</span><span class="s3">.</span><span class="s1">statements </span><span class="s3">= </span><span class="s1">body </span><span class="s3">= </span><span class="s1">inner</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">statements </span><span class="s3">= </span><span class="s1">save</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">expl_stmts </span><span class="s3">= </span><span class="s1">fail_save</span>
+        <span class="s1">expl_template </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">helper</span><span class="s3">(</span><span class="s6">&quot;_format_boolop&quot;</span><span class="s3">, </span><span class="s1">expl_list</span><span class="s3">, </span><span class="s1">astNum</span><span class="s3">(</span><span class="s1">is_or</span><span class="s3">))</span>
+        <span class="s1">expl </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">pop_format_context</span><span class="s3">(</span><span class="s1">expl_template</span><span class="s3">)</span>
+        <span class="s2">return </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">(</span><span class="s1">res_var</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Load</span><span class="s3">()), </span><span class="s1">self</span><span class="s3">.</span><span class="s1">explanation_param</span><span class="s3">(</span><span class="s1">expl</span><span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">visit_UnaryOp</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">unary</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">UnaryOp</span><span class="s3">) </span><span class="s1">-&gt; Tuple</span><span class="s3">[</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">, </span><span class="s1">str</span><span class="s3">]:</span>
+        <span class="s1">pattern </span><span class="s3">= </span><span class="s1">UNARY_MAP</span><span class="s3">[</span><span class="s1">unary</span><span class="s3">.</span><span class="s1">op</span><span class="s3">.</span><span class="s1">__class__</span><span class="s3">]</span>
+        <span class="s1">operand_res</span><span class="s3">, </span><span class="s1">operand_expl </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">visit</span><span class="s3">(</span><span class="s1">unary</span><span class="s3">.</span><span class="s1">operand</span><span class="s3">)</span>
+        <span class="s1">res </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">assign</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">UnaryOp</span><span class="s3">(</span><span class="s1">unary</span><span class="s3">.</span><span class="s1">op</span><span class="s3">, </span><span class="s1">operand_res</span><span class="s3">))</span>
+        <span class="s2">return </span><span class="s1">res</span><span class="s3">, </span><span class="s1">pattern </span><span class="s3">% (</span><span class="s1">operand_expl</span><span class="s3">,)</span>
+
+    <span class="s2">def </span><span class="s1">visit_BinOp</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">binop</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">BinOp</span><span class="s3">) </span><span class="s1">-&gt; Tuple</span><span class="s3">[</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">, </span><span class="s1">str</span><span class="s3">]:</span>
+        <span class="s1">symbol </span><span class="s3">= </span><span class="s1">BINOP_MAP</span><span class="s3">[</span><span class="s1">binop</span><span class="s3">.</span><span class="s1">op</span><span class="s3">.</span><span class="s1">__class__</span><span class="s3">]</span>
+        <span class="s1">left_expr</span><span class="s3">, </span><span class="s1">left_expl </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">visit</span><span class="s3">(</span><span class="s1">binop</span><span class="s3">.</span><span class="s1">left</span><span class="s3">)</span>
+        <span class="s1">right_expr</span><span class="s3">, </span><span class="s1">right_expl </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">visit</span><span class="s3">(</span><span class="s1">binop</span><span class="s3">.</span><span class="s1">right</span><span class="s3">)</span>
+        <span class="s1">explanation </span><span class="s3">= </span><span class="s6">f&quot;(</span><span class="s2">{</span><span class="s1">left_expl</span><span class="s2">} {</span><span class="s1">symbol</span><span class="s2">} {</span><span class="s1">right_expl</span><span class="s2">}</span><span class="s6">)&quot;</span>
+        <span class="s1">res </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">assign</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">BinOp</span><span class="s3">(</span><span class="s1">left_expr</span><span class="s3">, </span><span class="s1">binop</span><span class="s3">.</span><span class="s1">op</span><span class="s3">, </span><span class="s1">right_expr</span><span class="s3">))</span>
+        <span class="s2">return </span><span class="s1">res</span><span class="s3">, </span><span class="s1">explanation</span>
+
+    <span class="s2">def </span><span class="s1">visit_Call</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">call</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Call</span><span class="s3">) </span><span class="s1">-&gt; Tuple</span><span class="s3">[</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">, </span><span class="s1">str</span><span class="s3">]:</span>
+        <span class="s1">new_func</span><span class="s3">, </span><span class="s1">func_expl </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">visit</span><span class="s3">(</span><span class="s1">call</span><span class="s3">.</span><span class="s1">func</span><span class="s3">)</span>
+        <span class="s1">arg_expls </span><span class="s3">= []</span>
+        <span class="s1">new_args </span><span class="s3">= []</span>
+        <span class="s1">new_kwargs </span><span class="s3">= []</span>
+        <span class="s2">for </span><span class="s1">arg </span><span class="s2">in </span><span class="s1">call</span><span class="s3">.</span><span class="s1">args</span><span class="s3">:</span>
+            <span class="s2">if </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">arg</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">) </span><span class="s2">and </span><span class="s1">arg</span><span class="s3">.</span><span class="s1">id </span><span class="s2">in </span><span class="s1">self</span><span class="s3">.</span><span class="s1">variables_overwrite</span><span class="s3">:</span>
+                <span class="s1">arg </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">variables_overwrite</span><span class="s3">[</span><span class="s1">arg</span><span class="s3">.</span><span class="s1">id</span><span class="s3">]  </span><span class="s4"># type:ignore[assignment]</span>
+            <span class="s1">res</span><span class="s3">, </span><span class="s1">expl </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">visit</span><span class="s3">(</span><span class="s1">arg</span><span class="s3">)</span>
+            <span class="s1">arg_expls</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">expl</span><span class="s3">)</span>
+            <span class="s1">new_args</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">res</span><span class="s3">)</span>
+        <span class="s2">for </span><span class="s1">keyword </span><span class="s2">in </span><span class="s1">call</span><span class="s3">.</span><span class="s1">keywords</span><span class="s3">:</span>
+            <span class="s2">if </span><span class="s3">(</span>
+                <span class="s1">isinstance</span><span class="s3">(</span><span class="s1">keyword</span><span class="s3">.</span><span class="s1">value</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">)</span>
+                <span class="s2">and </span><span class="s1">keyword</span><span class="s3">.</span><span class="s1">value</span><span class="s3">.</span><span class="s1">id </span><span class="s2">in </span><span class="s1">self</span><span class="s3">.</span><span class="s1">variables_overwrite</span>
+            <span class="s3">):</span>
+                <span class="s1">keyword</span><span class="s3">.</span><span class="s1">value </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">variables_overwrite</span><span class="s3">[</span>
+                    <span class="s1">keyword</span><span class="s3">.</span><span class="s1">value</span><span class="s3">.</span><span class="s1">id</span>
+                <span class="s3">]  </span><span class="s4"># type:ignore[assignment]</span>
+            <span class="s1">res</span><span class="s3">, </span><span class="s1">expl </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">visit</span><span class="s3">(</span><span class="s1">keyword</span><span class="s3">.</span><span class="s1">value</span><span class="s3">)</span>
+            <span class="s1">new_kwargs</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">keyword</span><span class="s3">(</span><span class="s1">keyword</span><span class="s3">.</span><span class="s1">arg</span><span class="s3">, </span><span class="s1">res</span><span class="s3">))</span>
+            <span class="s2">if </span><span class="s1">keyword</span><span class="s3">.</span><span class="s1">arg</span><span class="s3">:</span>
+                <span class="s1">arg_expls</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">keyword</span><span class="s3">.</span><span class="s1">arg </span><span class="s3">+ </span><span class="s6">&quot;=&quot; </span><span class="s3">+ </span><span class="s1">expl</span><span class="s3">)</span>
+            <span class="s2">else</span><span class="s3">:  </span><span class="s4"># **args have `arg` keywords with an .arg of None</span>
+                <span class="s1">arg_expls</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s6">&quot;**&quot; </span><span class="s3">+ </span><span class="s1">expl</span><span class="s3">)</span>
+
+        <span class="s1">expl </span><span class="s3">= </span><span class="s6">&quot;{}({})&quot;</span><span class="s3">.</span><span class="s1">format</span><span class="s3">(</span><span class="s1">func_expl</span><span class="s3">, </span><span class="s6">&quot;, &quot;</span><span class="s3">.</span><span class="s1">join</span><span class="s3">(</span><span class="s1">arg_expls</span><span class="s3">))</span>
+        <span class="s1">new_call </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Call</span><span class="s3">(</span><span class="s1">new_func</span><span class="s3">, </span><span class="s1">new_args</span><span class="s3">, </span><span class="s1">new_kwargs</span><span class="s3">)</span>
+        <span class="s1">res </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">assign</span><span class="s3">(</span><span class="s1">new_call</span><span class="s3">)</span>
+        <span class="s1">res_expl </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">explanation_param</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">display</span><span class="s3">(</span><span class="s1">res</span><span class="s3">))</span>
+        <span class="s1">outer_expl </span><span class="s3">= </span><span class="s6">f&quot;</span><span class="s2">{</span><span class="s1">res_expl</span><span class="s2">}\n{{{</span><span class="s1">res_expl</span><span class="s2">} </span><span class="s6">= </span><span class="s2">{</span><span class="s1">expl</span><span class="s2">}\n}}</span><span class="s6">&quot;</span>
+        <span class="s2">return </span><span class="s1">res</span><span class="s3">, </span><span class="s1">outer_expl</span>
+
+    <span class="s2">def </span><span class="s1">visit_Starred</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">starred</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Starred</span><span class="s3">) </span><span class="s1">-&gt; Tuple</span><span class="s3">[</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Starred</span><span class="s3">, </span><span class="s1">str</span><span class="s3">]:</span>
+        <span class="s4"># A Starred node can appear in a function call.</span>
+        <span class="s1">res</span><span class="s3">, </span><span class="s1">expl </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">visit</span><span class="s3">(</span><span class="s1">starred</span><span class="s3">.</span><span class="s1">value</span><span class="s3">)</span>
+        <span class="s1">new_starred </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Starred</span><span class="s3">(</span><span class="s1">res</span><span class="s3">, </span><span class="s1">starred</span><span class="s3">.</span><span class="s1">ctx</span><span class="s3">)</span>
+        <span class="s2">return </span><span class="s1">new_starred</span><span class="s3">, </span><span class="s6">&quot;*&quot; </span><span class="s3">+ </span><span class="s1">expl</span>
+
+    <span class="s2">def </span><span class="s1">visit_Attribute</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">attr</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Attribute</span><span class="s3">) </span><span class="s1">-&gt; Tuple</span><span class="s3">[</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">, </span><span class="s1">str</span><span class="s3">]:</span>
+        <span class="s2">if not </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">attr</span><span class="s3">.</span><span class="s1">ctx</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Load</span><span class="s3">):</span>
+            <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">generic_visit</span><span class="s3">(</span><span class="s1">attr</span><span class="s3">)</span>
+        <span class="s1">value</span><span class="s3">, </span><span class="s1">value_expl </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">visit</span><span class="s3">(</span><span class="s1">attr</span><span class="s3">.</span><span class="s1">value</span><span class="s3">)</span>
+        <span class="s1">res </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">assign</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Attribute</span><span class="s3">(</span><span class="s1">value</span><span class="s3">, </span><span class="s1">attr</span><span class="s3">.</span><span class="s1">attr</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Load</span><span class="s3">()))</span>
+        <span class="s1">res_expl </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">explanation_param</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">display</span><span class="s3">(</span><span class="s1">res</span><span class="s3">))</span>
+        <span class="s1">pat </span><span class="s3">= </span><span class="s6">&quot;%s</span><span class="s2">\n</span><span class="s6">{%s = %s.%s</span><span class="s2">\n</span><span class="s6">}&quot;</span>
+        <span class="s1">expl </span><span class="s3">= </span><span class="s1">pat </span><span class="s3">% (</span><span class="s1">res_expl</span><span class="s3">, </span><span class="s1">res_expl</span><span class="s3">, </span><span class="s1">value_expl</span><span class="s3">, </span><span class="s1">attr</span><span class="s3">.</span><span class="s1">attr</span><span class="s3">)</span>
+        <span class="s2">return </span><span class="s1">res</span><span class="s3">, </span><span class="s1">expl</span>
+
+    <span class="s2">def </span><span class="s1">visit_Compare</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">comp</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Compare</span><span class="s3">) </span><span class="s1">-&gt; Tuple</span><span class="s3">[</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">expr</span><span class="s3">, </span><span class="s1">str</span><span class="s3">]:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">push_format_context</span><span class="s3">()</span>
+        <span class="s4"># We first check if we have overwritten a variable in the previous assert</span>
+        <span class="s2">if </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">comp</span><span class="s3">.</span><span class="s1">left</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">) </span><span class="s2">and </span><span class="s1">comp</span><span class="s3">.</span><span class="s1">left</span><span class="s3">.</span><span class="s1">id </span><span class="s2">in </span><span class="s1">self</span><span class="s3">.</span><span class="s1">variables_overwrite</span><span class="s3">:</span>
+            <span class="s1">comp</span><span class="s3">.</span><span class="s1">left </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">variables_overwrite</span><span class="s3">[</span>
+                <span class="s1">comp</span><span class="s3">.</span><span class="s1">left</span><span class="s3">.</span><span class="s1">id</span>
+            <span class="s3">]  </span><span class="s4"># type:ignore[assignment]</span>
+        <span class="s2">if </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">comp</span><span class="s3">.</span><span class="s1">left</span><span class="s3">, </span><span class="s1">namedExpr</span><span class="s3">):</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">variables_overwrite</span><span class="s3">[</span>
+                <span class="s1">comp</span><span class="s3">.</span><span class="s1">left</span><span class="s3">.</span><span class="s1">target</span><span class="s3">.</span><span class="s1">id</span>
+            <span class="s3">] = </span><span class="s1">comp</span><span class="s3">.</span><span class="s1">left  </span><span class="s4"># type:ignore[assignment]</span>
+        <span class="s1">left_res</span><span class="s3">, </span><span class="s1">left_expl </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">visit</span><span class="s3">(</span><span class="s1">comp</span><span class="s3">.</span><span class="s1">left</span><span class="s3">)</span>
+        <span class="s2">if </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">comp</span><span class="s3">.</span><span class="s1">left</span><span class="s3">, (</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Compare</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">BoolOp</span><span class="s3">)):</span>
+            <span class="s1">left_expl </span><span class="s3">= </span><span class="s6">f&quot;(</span><span class="s2">{</span><span class="s1">left_expl</span><span class="s2">}</span><span class="s6">)&quot;</span>
+        <span class="s1">res_variables </span><span class="s3">= [</span><span class="s1">self</span><span class="s3">.</span><span class="s1">variable</span><span class="s3">() </span><span class="s2">for </span><span class="s1">i </span><span class="s2">in </span><span class="s1">range</span><span class="s3">(</span><span class="s1">len</span><span class="s3">(</span><span class="s1">comp</span><span class="s3">.</span><span class="s1">ops</span><span class="s3">))]</span>
+        <span class="s1">load_names </span><span class="s3">= [</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">(</span><span class="s1">v</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Load</span><span class="s3">()) </span><span class="s2">for </span><span class="s1">v </span><span class="s2">in </span><span class="s1">res_variables</span><span class="s3">]</span>
+        <span class="s1">store_names </span><span class="s3">= [</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">(</span><span class="s1">v</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Store</span><span class="s3">()) </span><span class="s2">for </span><span class="s1">v </span><span class="s2">in </span><span class="s1">res_variables</span><span class="s3">]</span>
+        <span class="s1">it </span><span class="s3">= </span><span class="s1">zip</span><span class="s3">(</span><span class="s1">range</span><span class="s3">(</span><span class="s1">len</span><span class="s3">(</span><span class="s1">comp</span><span class="s3">.</span><span class="s1">ops</span><span class="s3">)), </span><span class="s1">comp</span><span class="s3">.</span><span class="s1">ops</span><span class="s3">, </span><span class="s1">comp</span><span class="s3">.</span><span class="s1">comparators</span><span class="s3">)</span>
+        <span class="s1">expls </span><span class="s3">= []</span>
+        <span class="s1">syms </span><span class="s3">= []</span>
+        <span class="s1">results </span><span class="s3">= [</span><span class="s1">left_res</span><span class="s3">]</span>
+        <span class="s2">for </span><span class="s1">i</span><span class="s3">, </span><span class="s1">op</span><span class="s3">, </span><span class="s1">next_operand </span><span class="s2">in </span><span class="s1">it</span><span class="s3">:</span>
+            <span class="s2">if </span><span class="s3">(</span>
+                <span class="s1">isinstance</span><span class="s3">(</span><span class="s1">next_operand</span><span class="s3">, </span><span class="s1">namedExpr</span><span class="s3">)</span>
+                <span class="s2">and </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">left_res</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Name</span><span class="s3">)</span>
+                <span class="s2">and </span><span class="s1">next_operand</span><span class="s3">.</span><span class="s1">target</span><span class="s3">.</span><span class="s1">id </span><span class="s3">== </span><span class="s1">left_res</span><span class="s3">.</span><span class="s1">id</span>
+            <span class="s3">):</span>
+                <span class="s1">next_operand</span><span class="s3">.</span><span class="s1">target</span><span class="s3">.</span><span class="s1">id </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">variable</span><span class="s3">()</span>
+                <span class="s1">self</span><span class="s3">.</span><span class="s1">variables_overwrite</span><span class="s3">[</span>
+                    <span class="s1">left_res</span><span class="s3">.</span><span class="s1">id</span>
+                <span class="s3">] = </span><span class="s1">next_operand  </span><span class="s4"># type:ignore[assignment]</span>
+            <span class="s1">next_res</span><span class="s3">, </span><span class="s1">next_expl </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">visit</span><span class="s3">(</span><span class="s1">next_operand</span><span class="s3">)</span>
+            <span class="s2">if </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">next_operand</span><span class="s3">, (</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Compare</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">BoolOp</span><span class="s3">)):</span>
+                <span class="s1">next_expl </span><span class="s3">= </span><span class="s6">f&quot;(</span><span class="s2">{</span><span class="s1">next_expl</span><span class="s2">}</span><span class="s6">)&quot;</span>
+            <span class="s1">results</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">next_res</span><span class="s3">)</span>
+            <span class="s1">sym </span><span class="s3">= </span><span class="s1">BINOP_MAP</span><span class="s3">[</span><span class="s1">op</span><span class="s3">.</span><span class="s1">__class__</span><span class="s3">]</span>
+            <span class="s1">syms</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">astStr</span><span class="s3">(</span><span class="s1">sym</span><span class="s3">))</span>
+            <span class="s1">expl </span><span class="s3">= </span><span class="s6">f&quot;</span><span class="s2">{</span><span class="s1">left_expl</span><span class="s2">} {</span><span class="s1">sym</span><span class="s2">} {</span><span class="s1">next_expl</span><span class="s2">}</span><span class="s6">&quot;</span>
+            <span class="s1">expls</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">astStr</span><span class="s3">(</span><span class="s1">expl</span><span class="s3">))</span>
+            <span class="s1">res_expr </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Compare</span><span class="s3">(</span><span class="s1">left_res</span><span class="s3">, [</span><span class="s1">op</span><span class="s3">], [</span><span class="s1">next_res</span><span class="s3">])</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">statements</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Assign</span><span class="s3">([</span><span class="s1">store_names</span><span class="s3">[</span><span class="s1">i</span><span class="s3">]], </span><span class="s1">res_expr</span><span class="s3">))</span>
+            <span class="s1">left_res</span><span class="s3">, </span><span class="s1">left_expl </span><span class="s3">= </span><span class="s1">next_res</span><span class="s3">, </span><span class="s1">next_expl</span>
+        <span class="s4"># Use pytest.assertion.util._reprcompare if that's available.</span>
+        <span class="s1">expl_call </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">helper</span><span class="s3">(</span>
+            <span class="s6">&quot;_call_reprcompare&quot;</span><span class="s3">,</span>
+            <span class="s1">ast</span><span class="s3">.</span><span class="s1">Tuple</span><span class="s3">(</span><span class="s1">syms</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Load</span><span class="s3">()),</span>
+            <span class="s1">ast</span><span class="s3">.</span><span class="s1">Tuple</span><span class="s3">(</span><span class="s1">load_names</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Load</span><span class="s3">()),</span>
+            <span class="s1">ast</span><span class="s3">.</span><span class="s1">Tuple</span><span class="s3">(</span><span class="s1">expls</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Load</span><span class="s3">()),</span>
+            <span class="s1">ast</span><span class="s3">.</span><span class="s1">Tuple</span><span class="s3">(</span><span class="s1">results</span><span class="s3">, </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">Load</span><span class="s3">()),</span>
+        <span class="s3">)</span>
+        <span class="s2">if </span><span class="s1">len</span><span class="s3">(</span><span class="s1">comp</span><span class="s3">.</span><span class="s1">ops</span><span class="s3">) &gt; </span><span class="s5">1</span><span class="s3">:</span>
+            <span class="s1">res</span><span class="s3">: </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">expr </span><span class="s3">= </span><span class="s1">ast</span><span class="s3">.</span><span class="s1">BoolOp</span><span class="s3">(</span><span class="s1">ast</span><span class="s3">.</span><span class="s1">And</span><span class="s3">(), </span><span class="s1">load_names</span><span class="s3">)</span>
+        <span class="s2">else</span><span class="s3">:</span>
+            <span class="s1">res </span><span class="s3">= </span><span class="s1">load_names</span><span class="s3">[</span><span class="s5">0</span><span class="s3">]</span>
+
+        <span class="s2">return </span><span class="s1">res</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">explanation_param</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">pop_format_context</span><span class="s3">(</span><span class="s1">expl_call</span><span class="s3">))</span>
+
+
+<span class="s2">def </span><span class="s1">try_makedirs</span><span class="s3">(</span><span class="s1">cache_dir</span><span class="s3">: </span><span class="s1">Path</span><span class="s3">) </span><span class="s1">-&gt; bool</span><span class="s3">:</span>
+    <span class="s0">&quot;&quot;&quot;Attempt to create the given directory and sub-directories exist. 
+ 
+    Returns True if successful or if it already exists. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">try</span><span class="s3">:</span>
+        <span class="s1">os</span><span class="s3">.</span><span class="s1">makedirs</span><span class="s3">(</span><span class="s1">cache_dir</span><span class="s3">, </span><span class="s1">exist_ok</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+    <span class="s2">except </span><span class="s3">(</span><span class="s1">FileNotFoundError</span><span class="s3">, </span><span class="s1">NotADirectoryError</span><span class="s3">, </span><span class="s1">FileExistsError</span><span class="s3">):</span>
+        <span class="s4"># One of the path components was not a directory:</span>
+        <span class="s4"># - we're in a zip file</span>
+        <span class="s4"># - it is a file</span>
+        <span class="s2">return False</span>
+    <span class="s2">except </span><span class="s1">PermissionError</span><span class="s3">:</span>
+        <span class="s2">return False</span>
+    <span class="s2">except </span><span class="s1">OSError </span><span class="s2">as </span><span class="s1">e</span><span class="s3">:</span>
+        <span class="s4"># as of now, EROFS doesn't have an equivalent OSError-subclass</span>
+        <span class="s2">if </span><span class="s1">e</span><span class="s3">.</span><span class="s1">errno </span><span class="s3">== </span><span class="s1">errno</span><span class="s3">.</span><span class="s1">EROFS</span><span class="s3">:</span>
+            <span class="s2">return False</span>
+        <span class="s2">raise</span>
+    <span class="s2">return True</span>
+
+
+<span class="s2">def </span><span class="s1">get_cache_dir</span><span class="s3">(</span><span class="s1">file_path</span><span class="s3">: </span><span class="s1">Path</span><span class="s3">) </span><span class="s1">-&gt; Path</span><span class="s3">:</span>
+    <span class="s0">&quot;&quot;&quot;Return the cache directory to write .pyc files for the given .py file path.&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">sys</span><span class="s3">.</span><span class="s1">version_info </span><span class="s3">&gt;= (</span><span class="s5">3</span><span class="s3">, </span><span class="s5">8</span><span class="s3">) </span><span class="s2">and </span><span class="s1">sys</span><span class="s3">.</span><span class="s1">pycache_prefix</span><span class="s3">:</span>
+        <span class="s4"># given:</span>
+        <span class="s4">#   prefix = '/tmp/pycs'</span>
+        <span class="s4">#   path = '/home/user/proj/test_app.py'</span>
+        <span class="s4"># we want:</span>
+        <span class="s4">#   '/tmp/pycs/home/user/proj'</span>
+        <span class="s2">return </span><span class="s1">Path</span><span class="s3">(</span><span class="s1">sys</span><span class="s3">.</span><span class="s1">pycache_prefix</span><span class="s3">) / </span><span class="s1">Path</span><span class="s3">(*</span><span class="s1">file_path</span><span class="s3">.</span><span class="s1">parts</span><span class="s3">[</span><span class="s5">1</span><span class="s3">:-</span><span class="s5">1</span><span class="s3">])</span>
+    <span class="s2">else</span><span class="s3">:</span>
+        <span class="s4"># classic pycache directory</span>
+        <span class="s2">return </span><span class="s1">file_path</span><span class="s3">.</span><span class="s1">parent </span><span class="s3">/ </span><span class="s6">&quot;__pycache__&quot;</span>
+</pre>
+</body>
+</html>

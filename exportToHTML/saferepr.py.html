@@ -1,0 +1,203 @@
+<html>
+<head>
+<title>saferepr.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #6aab73;}
+.s4 { color: #2aacb8;}
+.s5 { color: #5f826b; font-style: italic;}
+.s6 { color: #7a7e85;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+saferepr.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">pprint</span>
+<span class="s0">import </span><span class="s1">reprlib</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Any</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Dict</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">IO</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Optional</span>
+
+
+<span class="s0">def </span><span class="s1">_try_repr_or_str</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">: </span><span class="s1">object</span><span class="s2">) </span><span class="s1">-&gt; str</span><span class="s2">:</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">repr</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">)</span>
+    <span class="s0">except </span><span class="s2">(</span><span class="s1">KeyboardInterrupt</span><span class="s2">, </span><span class="s1">SystemExit</span><span class="s2">):</span>
+        <span class="s0">raise</span>
+    <span class="s0">except </span><span class="s1">BaseException</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s3">f'</span><span class="s0">{</span><span class="s1">type</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">).</span><span class="s1">__name__</span><span class="s0">}</span><span class="s3">(&quot;</span><span class="s0">{</span><span class="s1">obj</span><span class="s0">}</span><span class="s3">&quot;)'</span>
+
+
+<span class="s0">def </span><span class="s1">_format_repr_exception</span><span class="s2">(</span><span class="s1">exc</span><span class="s2">: </span><span class="s1">BaseException</span><span class="s2">, </span><span class="s1">obj</span><span class="s2">: </span><span class="s1">object</span><span class="s2">) </span><span class="s1">-&gt; str</span><span class="s2">:</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s1">exc_info </span><span class="s2">= </span><span class="s1">_try_repr_or_str</span><span class="s2">(</span><span class="s1">exc</span><span class="s2">)</span>
+    <span class="s0">except </span><span class="s2">(</span><span class="s1">KeyboardInterrupt</span><span class="s2">, </span><span class="s1">SystemExit</span><span class="s2">):</span>
+        <span class="s0">raise</span>
+    <span class="s0">except </span><span class="s1">BaseException </span><span class="s0">as </span><span class="s1">exc</span><span class="s2">:</span>
+        <span class="s1">exc_info </span><span class="s2">= </span><span class="s3">f&quot;unpresentable exception (</span><span class="s0">{</span><span class="s1">_try_repr_or_str</span><span class="s2">(</span><span class="s1">exc</span><span class="s2">)</span><span class="s0">}</span><span class="s3">)&quot;</span>
+    <span class="s0">return </span><span class="s3">&quot;&lt;[{} raised in repr()] {} object at 0x{:x}&gt;&quot;</span><span class="s2">.</span><span class="s1">format</span><span class="s2">(</span>
+        <span class="s1">exc_info</span><span class="s2">, </span><span class="s1">type</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">).</span><span class="s1">__name__</span><span class="s2">, </span><span class="s1">id</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">)</span>
+    <span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">_ellipsize</span><span class="s2">(</span><span class="s1">s</span><span class="s2">: </span><span class="s1">str</span><span class="s2">, </span><span class="s1">maxsize</span><span class="s2">: </span><span class="s1">int</span><span class="s2">) </span><span class="s1">-&gt; str</span><span class="s2">:</span>
+    <span class="s0">if </span><span class="s1">len</span><span class="s2">(</span><span class="s1">s</span><span class="s2">) &gt; </span><span class="s1">maxsize</span><span class="s2">:</span>
+        <span class="s1">i </span><span class="s2">= </span><span class="s1">max</span><span class="s2">(</span><span class="s4">0</span><span class="s2">, (</span><span class="s1">maxsize </span><span class="s2">- </span><span class="s4">3</span><span class="s2">) // </span><span class="s4">2</span><span class="s2">)</span>
+        <span class="s1">j </span><span class="s2">= </span><span class="s1">max</span><span class="s2">(</span><span class="s4">0</span><span class="s2">, </span><span class="s1">maxsize </span><span class="s2">- </span><span class="s4">3 </span><span class="s2">- </span><span class="s1">i</span><span class="s2">)</span>
+        <span class="s0">return </span><span class="s1">s</span><span class="s2">[:</span><span class="s1">i</span><span class="s2">] + </span><span class="s3">&quot;...&quot; </span><span class="s2">+ </span><span class="s1">s</span><span class="s2">[</span><span class="s1">len</span><span class="s2">(</span><span class="s1">s</span><span class="s2">) - </span><span class="s1">j </span><span class="s2">:]</span>
+    <span class="s0">return </span><span class="s1">s</span>
+
+
+<span class="s0">class </span><span class="s1">SafeRepr</span><span class="s2">(</span><span class="s1">reprlib</span><span class="s2">.</span><span class="s1">Repr</span><span class="s2">):</span>
+    <span class="s5">&quot;&quot;&quot; 
+    repr.Repr that limits the resulting size of repr() and includes 
+    information on exceptions raised during the call. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">maxsize</span><span class="s2">: </span><span class="s1">Optional</span><span class="s2">[</span><span class="s1">int</span><span class="s2">], </span><span class="s1">use_ascii</span><span class="s2">: </span><span class="s1">bool </span><span class="s2">= </span><span class="s0">False</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s5">&quot;&quot;&quot; 
+        :param maxsize: 
+            If not None, will truncate the resulting repr to that specific size, using ellipsis 
+            somewhere in the middle to hide the extra text. 
+            If None, will not impose any size limits on the returning repr. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">super</span><span class="s2">().</span><span class="s1">__init__</span><span class="s2">()</span>
+        <span class="s6"># ``maxstring`` is used by the superclass, and needs to be an int; using a</span>
+        <span class="s6"># very large number in case maxsize is None, meaning we want to disable</span>
+        <span class="s6"># truncation.</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">maxstring </span><span class="s2">= </span><span class="s1">maxsize </span><span class="s0">if </span><span class="s1">maxsize </span><span class="s0">is not None else </span><span class="s4">1_000_000_000</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">maxsize </span><span class="s2">= </span><span class="s1">maxsize</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">use_ascii </span><span class="s2">= </span><span class="s1">use_ascii</span>
+
+    <span class="s0">def </span><span class="s1">repr</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">x</span><span class="s2">: </span><span class="s1">object</span><span class="s2">) </span><span class="s1">-&gt; str</span><span class="s2">:</span>
+        <span class="s0">try</span><span class="s2">:</span>
+            <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">use_ascii</span><span class="s2">:</span>
+                <span class="s1">s </span><span class="s2">= </span><span class="s1">ascii</span><span class="s2">(</span><span class="s1">x</span><span class="s2">)</span>
+            <span class="s0">else</span><span class="s2">:</span>
+                <span class="s1">s </span><span class="s2">= </span><span class="s1">super</span><span class="s2">().</span><span class="s1">repr</span><span class="s2">(</span><span class="s1">x</span><span class="s2">)</span>
+
+        <span class="s0">except </span><span class="s2">(</span><span class="s1">KeyboardInterrupt</span><span class="s2">, </span><span class="s1">SystemExit</span><span class="s2">):</span>
+            <span class="s0">raise</span>
+        <span class="s0">except </span><span class="s1">BaseException </span><span class="s0">as </span><span class="s1">exc</span><span class="s2">:</span>
+            <span class="s1">s </span><span class="s2">= </span><span class="s1">_format_repr_exception</span><span class="s2">(</span><span class="s1">exc</span><span class="s2">, </span><span class="s1">x</span><span class="s2">)</span>
+        <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">maxsize </span><span class="s0">is not None</span><span class="s2">:</span>
+            <span class="s1">s </span><span class="s2">= </span><span class="s1">_ellipsize</span><span class="s2">(</span><span class="s1">s</span><span class="s2">, </span><span class="s1">self</span><span class="s2">.</span><span class="s1">maxsize</span><span class="s2">)</span>
+        <span class="s0">return </span><span class="s1">s</span>
+
+    <span class="s0">def </span><span class="s1">repr_instance</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">x</span><span class="s2">: </span><span class="s1">object</span><span class="s2">, </span><span class="s1">level</span><span class="s2">: </span><span class="s1">int</span><span class="s2">) </span><span class="s1">-&gt; str</span><span class="s2">:</span>
+        <span class="s0">try</span><span class="s2">:</span>
+            <span class="s1">s </span><span class="s2">= </span><span class="s1">repr</span><span class="s2">(</span><span class="s1">x</span><span class="s2">)</span>
+        <span class="s0">except </span><span class="s2">(</span><span class="s1">KeyboardInterrupt</span><span class="s2">, </span><span class="s1">SystemExit</span><span class="s2">):</span>
+            <span class="s0">raise</span>
+        <span class="s0">except </span><span class="s1">BaseException </span><span class="s0">as </span><span class="s1">exc</span><span class="s2">:</span>
+            <span class="s1">s </span><span class="s2">= </span><span class="s1">_format_repr_exception</span><span class="s2">(</span><span class="s1">exc</span><span class="s2">, </span><span class="s1">x</span><span class="s2">)</span>
+        <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">maxsize </span><span class="s0">is not None</span><span class="s2">:</span>
+            <span class="s1">s </span><span class="s2">= </span><span class="s1">_ellipsize</span><span class="s2">(</span><span class="s1">s</span><span class="s2">, </span><span class="s1">self</span><span class="s2">.</span><span class="s1">maxsize</span><span class="s2">)</span>
+        <span class="s0">return </span><span class="s1">s</span>
+
+
+<span class="s0">def </span><span class="s1">safeformat</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">: </span><span class="s1">object</span><span class="s2">) </span><span class="s1">-&gt; str</span><span class="s2">:</span>
+    <span class="s5">&quot;&quot;&quot;Return a pretty printed string for the given object. 
+ 
+    Failing __repr__ functions of user instances will be represented 
+    with a short exception info. 
+    &quot;&quot;&quot;</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">pprint</span><span class="s2">.</span><span class="s1">pformat</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">)</span>
+    <span class="s0">except </span><span class="s1">Exception </span><span class="s0">as </span><span class="s1">exc</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">_format_repr_exception</span><span class="s2">(</span><span class="s1">exc</span><span class="s2">, </span><span class="s1">obj</span><span class="s2">)</span>
+
+
+<span class="s6"># Maximum size of overall repr of objects to display during assertion errors.</span>
+<span class="s1">DEFAULT_REPR_MAX_SIZE </span><span class="s2">= </span><span class="s4">240</span>
+
+
+<span class="s0">def </span><span class="s1">saferepr</span><span class="s2">(</span>
+    <span class="s1">obj</span><span class="s2">: </span><span class="s1">object</span><span class="s2">, </span><span class="s1">maxsize</span><span class="s2">: </span><span class="s1">Optional</span><span class="s2">[</span><span class="s1">int</span><span class="s2">] = </span><span class="s1">DEFAULT_REPR_MAX_SIZE</span><span class="s2">, </span><span class="s1">use_ascii</span><span class="s2">: </span><span class="s1">bool </span><span class="s2">= </span><span class="s0">False</span>
+<span class="s2">) </span><span class="s1">-&gt; str</span><span class="s2">:</span>
+    <span class="s5">&quot;&quot;&quot;Return a size-limited safe repr-string for the given object. 
+ 
+    Failing __repr__ functions of user instances will be represented 
+    with a short exception info and 'saferepr' generally takes 
+    care to never raise exceptions itself. 
+ 
+    This function is a wrapper around the Repr/reprlib functionality of the 
+    stdlib. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">return </span><span class="s1">SafeRepr</span><span class="s2">(</span><span class="s1">maxsize</span><span class="s2">, </span><span class="s1">use_ascii</span><span class="s2">).</span><span class="s1">repr</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">saferepr_unlimited</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">: </span><span class="s1">object</span><span class="s2">, </span><span class="s1">use_ascii</span><span class="s2">: </span><span class="s1">bool </span><span class="s2">= </span><span class="s0">True</span><span class="s2">) </span><span class="s1">-&gt; str</span><span class="s2">:</span>
+    <span class="s5">&quot;&quot;&quot;Return an unlimited-size safe repr-string for the given object. 
+ 
+    As with saferepr, failing __repr__ functions of user instances 
+    will be represented with a short exception info. 
+ 
+    This function is a wrapper around simple repr. 
+ 
+    Note: a cleaner solution would be to alter ``saferepr``this way 
+    when maxsize=None, but that might affect some other code. 
+    &quot;&quot;&quot;</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s0">if </span><span class="s1">use_ascii</span><span class="s2">:</span>
+            <span class="s0">return </span><span class="s1">ascii</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">)</span>
+        <span class="s0">return </span><span class="s1">repr</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">)</span>
+    <span class="s0">except </span><span class="s1">Exception </span><span class="s0">as </span><span class="s1">exc</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">_format_repr_exception</span><span class="s2">(</span><span class="s1">exc</span><span class="s2">, </span><span class="s1">obj</span><span class="s2">)</span>
+
+
+<span class="s0">class </span><span class="s1">AlwaysDispatchingPrettyPrinter</span><span class="s2">(</span><span class="s1">pprint</span><span class="s2">.</span><span class="s1">PrettyPrinter</span><span class="s2">):</span>
+    <span class="s5">&quot;&quot;&quot;PrettyPrinter that always dispatches (regardless of width).&quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">_format</span><span class="s2">(</span>
+        <span class="s1">self</span><span class="s2">,</span>
+        <span class="s1">object</span><span class="s2">: </span><span class="s1">object</span><span class="s2">,</span>
+        <span class="s1">stream</span><span class="s2">: </span><span class="s1">IO</span><span class="s2">[</span><span class="s1">str</span><span class="s2">],</span>
+        <span class="s1">indent</span><span class="s2">: </span><span class="s1">int</span><span class="s2">,</span>
+        <span class="s1">allowance</span><span class="s2">: </span><span class="s1">int</span><span class="s2">,</span>
+        <span class="s1">context</span><span class="s2">: </span><span class="s1">Dict</span><span class="s2">[</span><span class="s1">int</span><span class="s2">, </span><span class="s1">Any</span><span class="s2">],</span>
+        <span class="s1">level</span><span class="s2">: </span><span class="s1">int</span><span class="s2">,</span>
+    <span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s6"># Type ignored because _dispatch is private.</span>
+        <span class="s1">p </span><span class="s2">= </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_dispatch</span><span class="s2">.</span><span class="s1">get</span><span class="s2">(</span><span class="s1">type</span><span class="s2">(</span><span class="s1">object</span><span class="s2">).</span><span class="s1">__repr__</span><span class="s2">, </span><span class="s0">None</span><span class="s2">)  </span><span class="s6"># type: ignore[attr-defined]</span>
+
+        <span class="s1">objid </span><span class="s2">= </span><span class="s1">id</span><span class="s2">(</span><span class="s1">object</span><span class="s2">)</span>
+        <span class="s0">if </span><span class="s1">objid </span><span class="s0">in </span><span class="s1">context </span><span class="s0">or </span><span class="s1">p </span><span class="s0">is None</span><span class="s2">:</span>
+            <span class="s6"># Type ignored because _format is private.</span>
+            <span class="s1">super</span><span class="s2">().</span><span class="s1">_format</span><span class="s2">(  </span><span class="s6"># type: ignore[misc]</span>
+                <span class="s1">object</span><span class="s2">,</span>
+                <span class="s1">stream</span><span class="s2">,</span>
+                <span class="s1">indent</span><span class="s2">,</span>
+                <span class="s1">allowance</span><span class="s2">,</span>
+                <span class="s1">context</span><span class="s2">,</span>
+                <span class="s1">level</span><span class="s2">,</span>
+            <span class="s2">)</span>
+            <span class="s0">return</span>
+
+        <span class="s1">context</span><span class="s2">[</span><span class="s1">objid</span><span class="s2">] = </span><span class="s4">1</span>
+        <span class="s1">p</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">object</span><span class="s2">, </span><span class="s1">stream</span><span class="s2">, </span><span class="s1">indent</span><span class="s2">, </span><span class="s1">allowance</span><span class="s2">, </span><span class="s1">context</span><span class="s2">, </span><span class="s1">level </span><span class="s2">+ </span><span class="s4">1</span><span class="s2">)</span>
+        <span class="s0">del </span><span class="s1">context</span><span class="s2">[</span><span class="s1">objid</span><span class="s2">]</span>
+
+
+<span class="s0">def </span><span class="s1">_pformat_dispatch</span><span class="s2">(</span>
+    <span class="s1">object</span><span class="s2">: </span><span class="s1">object</span><span class="s2">,</span>
+    <span class="s1">indent</span><span class="s2">: </span><span class="s1">int </span><span class="s2">= </span><span class="s4">1</span><span class="s2">,</span>
+    <span class="s1">width</span><span class="s2">: </span><span class="s1">int </span><span class="s2">= </span><span class="s4">80</span><span class="s2">,</span>
+    <span class="s1">depth</span><span class="s2">: </span><span class="s1">Optional</span><span class="s2">[</span><span class="s1">int</span><span class="s2">] = </span><span class="s0">None</span><span class="s2">,</span>
+    <span class="s2">*,</span>
+    <span class="s1">compact</span><span class="s2">: </span><span class="s1">bool </span><span class="s2">= </span><span class="s0">False</span><span class="s2">,</span>
+<span class="s2">) </span><span class="s1">-&gt; str</span><span class="s2">:</span>
+    <span class="s0">return </span><span class="s1">AlwaysDispatchingPrettyPrinter</span><span class="s2">(</span>
+        <span class="s1">indent</span><span class="s2">=</span><span class="s1">indent</span><span class="s2">, </span><span class="s1">width</span><span class="s2">=</span><span class="s1">width</span><span class="s2">, </span><span class="s1">depth</span><span class="s2">=</span><span class="s1">depth</span><span class="s2">, </span><span class="s1">compact</span><span class="s2">=</span><span class="s1">compact</span>
+    <span class="s2">).</span><span class="s1">pformat</span><span class="s2">(</span><span class="s1">object</span><span class="s2">)</span>
+</pre>
+</body>
+</html>

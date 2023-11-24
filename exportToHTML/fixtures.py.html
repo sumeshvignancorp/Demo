@@ -1,0 +1,69 @@
+<html>
+<head>
+<title>fixtures.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #7a7e85;}
+.s1 { color: #bcbec4;}
+.s2 { color: #cf8e6d;}
+.s3 { color: #bcbec4;}
+.s4 { color: #5f826b; font-style: italic;}
+.s5 { color: #6aab73;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+fixtures.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># This Source Code Form is subject to the terms of the Mozilla Public</span>
+<span class="s0"># License, v. 2.0. If a copy of the MPL was not distributed with this</span>
+<span class="s0"># file, You can obtain one at http://mozilla.org/MPL/2.0/.</span>
+<span class="s2">import </span><span class="s1">warnings</span>
+
+<span class="s2">import </span><span class="s1">pytest</span>
+
+<span class="s1">extras_stash_key </span><span class="s3">= </span><span class="s1">pytest</span><span class="s3">.</span><span class="s1">StashKey</span><span class="s3">[</span><span class="s1">list</span><span class="s3">]()</span>
+
+
+<span class="s3">@</span><span class="s1">pytest</span><span class="s3">.</span><span class="s1">fixture</span>
+<span class="s2">def </span><span class="s1">extra</span><span class="s3">(</span><span class="s1">pytestconfig</span><span class="s3">):</span>
+    <span class="s4">&quot;&quot;&quot;DEPRECATED: Add details to the HTML reports. 
+ 
+    .. code-block:: python 
+ 
+        import pytest_html 
+ 
+ 
+        def test_foo(extra): 
+            extra.append(pytest_html.extras.url(&quot;https://www.example.com/&quot;)) 
+    &quot;&quot;&quot;</span>
+    <span class="s1">warnings</span><span class="s3">.</span><span class="s1">warn</span><span class="s3">(</span>
+        <span class="s5">&quot;The 'extra' fixture is deprecated and will be removed in a future release&quot;</span>
+        <span class="s5">&quot;, use 'extras' instead.&quot;</span><span class="s3">,</span>
+        <span class="s1">DeprecationWarning</span><span class="s3">,</span>
+    <span class="s3">)</span>
+    <span class="s1">pytestconfig</span><span class="s3">.</span><span class="s1">stash</span><span class="s3">[</span><span class="s1">extras_stash_key</span><span class="s3">] = []</span>
+    <span class="s2">yield </span><span class="s1">pytestconfig</span><span class="s3">.</span><span class="s1">stash</span><span class="s3">[</span><span class="s1">extras_stash_key</span><span class="s3">]</span>
+    <span class="s2">del </span><span class="s1">pytestconfig</span><span class="s3">.</span><span class="s1">stash</span><span class="s3">[</span><span class="s1">extras_stash_key</span><span class="s3">][:]</span>
+
+
+<span class="s3">@</span><span class="s1">pytest</span><span class="s3">.</span><span class="s1">fixture</span>
+<span class="s2">def </span><span class="s1">extras</span><span class="s3">(</span><span class="s1">pytestconfig</span><span class="s3">):</span>
+    <span class="s4">&quot;&quot;&quot;Add details to the HTML reports. 
+ 
+    .. code-block:: python 
+ 
+        import pytest_html 
+ 
+ 
+        def test_foo(extras): 
+            extras.append(pytest_html.extras.url(&quot;https://www.example.com/&quot;)) 
+    &quot;&quot;&quot;</span>
+    <span class="s1">pytestconfig</span><span class="s3">.</span><span class="s1">stash</span><span class="s3">[</span><span class="s1">extras_stash_key</span><span class="s3">] = []</span>
+    <span class="s2">yield </span><span class="s1">pytestconfig</span><span class="s3">.</span><span class="s1">stash</span><span class="s3">[</span><span class="s1">extras_stash_key</span><span class="s3">]</span>
+    <span class="s2">del </span><span class="s1">pytestconfig</span><span class="s3">.</span><span class="s1">stash</span><span class="s3">[</span><span class="s1">extras_stash_key</span><span class="s3">][:]</span>
+</pre>
+</body>
+</html>

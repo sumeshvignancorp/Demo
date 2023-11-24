@@ -1,0 +1,241 @@
+<html>
+<head>
+<title>findpaths.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #5f826b; font-style: italic;}
+.s4 { color: #7a7e85;}
+.s5 { color: #6aab73;}
+.s6 { color: #2aacb8;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+findpaths.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">os</span>
+<span class="s0">import </span><span class="s1">sys</span>
+<span class="s0">from </span><span class="s1">pathlib </span><span class="s0">import </span><span class="s1">Path</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Dict</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Iterable</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">List</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Optional</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Sequence</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Tuple</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">TYPE_CHECKING</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Union</span>
+
+<span class="s0">import </span><span class="s1">iniconfig</span>
+
+<span class="s0">from </span><span class="s2">.</span><span class="s1">exceptions </span><span class="s0">import </span><span class="s1">UsageError</span>
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">outcomes </span><span class="s0">import </span><span class="s1">fail</span>
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">pathlib </span><span class="s0">import </span><span class="s1">absolutepath</span>
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">pathlib </span><span class="s0">import </span><span class="s1">commonpath</span>
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">pathlib </span><span class="s0">import </span><span class="s1">safe_exists</span>
+
+<span class="s0">if </span><span class="s1">TYPE_CHECKING</span><span class="s2">:</span>
+    <span class="s0">from </span><span class="s2">. </span><span class="s0">import </span><span class="s1">Config</span>
+
+
+<span class="s0">def </span><span class="s1">_parse_ini_config</span><span class="s2">(</span><span class="s1">path</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">) </span><span class="s1">-&gt; iniconfig</span><span class="s2">.</span><span class="s1">IniConfig</span><span class="s2">:</span>
+    <span class="s3">&quot;&quot;&quot;Parse the given generic '.ini' file using legacy IniConfig parser, returning 
+    the parsed object. 
+ 
+    Raise UsageError if the file cannot be parsed. 
+    &quot;&quot;&quot;</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">iniconfig</span><span class="s2">.</span><span class="s1">IniConfig</span><span class="s2">(</span><span class="s1">str</span><span class="s2">(</span><span class="s1">path</span><span class="s2">))</span>
+    <span class="s0">except </span><span class="s1">iniconfig</span><span class="s2">.</span><span class="s1">ParseError </span><span class="s0">as </span><span class="s1">exc</span><span class="s2">:</span>
+        <span class="s0">raise </span><span class="s1">UsageError</span><span class="s2">(</span><span class="s1">str</span><span class="s2">(</span><span class="s1">exc</span><span class="s2">)) </span><span class="s0">from </span><span class="s1">exc</span>
+
+
+<span class="s0">def </span><span class="s1">load_config_dict_from_file</span><span class="s2">(</span>
+    <span class="s1">filepath</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">,</span>
+<span class="s2">) </span><span class="s1">-&gt; Optional</span><span class="s2">[</span><span class="s1">Dict</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">Union</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">List</span><span class="s2">[</span><span class="s1">str</span><span class="s2">]]]]:</span>
+    <span class="s3">&quot;&quot;&quot;Load pytest configuration from the given file path, if supported. 
+ 
+    Return None if the file does not contain valid pytest configuration. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s4"># Configuration from ini files are obtained from the [pytest] section, if present.</span>
+    <span class="s0">if </span><span class="s1">filepath</span><span class="s2">.</span><span class="s1">suffix </span><span class="s2">== </span><span class="s5">&quot;.ini&quot;</span><span class="s2">:</span>
+        <span class="s1">iniconfig </span><span class="s2">= </span><span class="s1">_parse_ini_config</span><span class="s2">(</span><span class="s1">filepath</span><span class="s2">)</span>
+
+        <span class="s0">if </span><span class="s5">&quot;pytest&quot; </span><span class="s0">in </span><span class="s1">iniconfig</span><span class="s2">:</span>
+            <span class="s0">return </span><span class="s1">dict</span><span class="s2">(</span><span class="s1">iniconfig</span><span class="s2">[</span><span class="s5">&quot;pytest&quot;</span><span class="s2">].</span><span class="s1">items</span><span class="s2">())</span>
+        <span class="s0">else</span><span class="s2">:</span>
+            <span class="s4"># &quot;pytest.ini&quot; files are always the source of configuration, even if empty.</span>
+            <span class="s0">if </span><span class="s1">filepath</span><span class="s2">.</span><span class="s1">name </span><span class="s2">== </span><span class="s5">&quot;pytest.ini&quot;</span><span class="s2">:</span>
+                <span class="s0">return </span><span class="s2">{}</span>
+
+    <span class="s4"># '.cfg' files are considered if they contain a &quot;[tool:pytest]&quot; section.</span>
+    <span class="s0">elif </span><span class="s1">filepath</span><span class="s2">.</span><span class="s1">suffix </span><span class="s2">== </span><span class="s5">&quot;.cfg&quot;</span><span class="s2">:</span>
+        <span class="s1">iniconfig </span><span class="s2">= </span><span class="s1">_parse_ini_config</span><span class="s2">(</span><span class="s1">filepath</span><span class="s2">)</span>
+
+        <span class="s0">if </span><span class="s5">&quot;tool:pytest&quot; </span><span class="s0">in </span><span class="s1">iniconfig</span><span class="s2">.</span><span class="s1">sections</span><span class="s2">:</span>
+            <span class="s0">return </span><span class="s1">dict</span><span class="s2">(</span><span class="s1">iniconfig</span><span class="s2">[</span><span class="s5">&quot;tool:pytest&quot;</span><span class="s2">].</span><span class="s1">items</span><span class="s2">())</span>
+        <span class="s0">elif </span><span class="s5">&quot;pytest&quot; </span><span class="s0">in </span><span class="s1">iniconfig</span><span class="s2">.</span><span class="s1">sections</span><span class="s2">:</span>
+            <span class="s4"># If a setup.cfg contains a &quot;[pytest]&quot; section, we raise a failure to indicate users that</span>
+            <span class="s4"># plain &quot;[pytest]&quot; sections in setup.cfg files is no longer supported (#3086).</span>
+            <span class="s1">fail</span><span class="s2">(</span><span class="s1">CFG_PYTEST_SECTION</span><span class="s2">.</span><span class="s1">format</span><span class="s2">(</span><span class="s1">filename</span><span class="s2">=</span><span class="s5">&quot;setup.cfg&quot;</span><span class="s2">), </span><span class="s1">pytrace</span><span class="s2">=</span><span class="s0">False</span><span class="s2">)</span>
+
+    <span class="s4"># '.toml' files are considered if they contain a [tool.pytest.ini_options] table.</span>
+    <span class="s0">elif </span><span class="s1">filepath</span><span class="s2">.</span><span class="s1">suffix </span><span class="s2">== </span><span class="s5">&quot;.toml&quot;</span><span class="s2">:</span>
+        <span class="s0">if </span><span class="s1">sys</span><span class="s2">.</span><span class="s1">version_info </span><span class="s2">&gt;= (</span><span class="s6">3</span><span class="s2">, </span><span class="s6">11</span><span class="s2">):</span>
+            <span class="s0">import </span><span class="s1">tomllib</span>
+        <span class="s0">else</span><span class="s2">:</span>
+            <span class="s0">import </span><span class="s1">tomli </span><span class="s0">as </span><span class="s1">tomllib</span>
+
+        <span class="s1">toml_text </span><span class="s2">= </span><span class="s1">filepath</span><span class="s2">.</span><span class="s1">read_text</span><span class="s2">(</span><span class="s1">encoding</span><span class="s2">=</span><span class="s5">&quot;utf-8&quot;</span><span class="s2">)</span>
+        <span class="s0">try</span><span class="s2">:</span>
+            <span class="s1">config </span><span class="s2">= </span><span class="s1">tomllib</span><span class="s2">.</span><span class="s1">loads</span><span class="s2">(</span><span class="s1">toml_text</span><span class="s2">)</span>
+        <span class="s0">except </span><span class="s1">tomllib</span><span class="s2">.</span><span class="s1">TOMLDecodeError </span><span class="s0">as </span><span class="s1">exc</span><span class="s2">:</span>
+            <span class="s0">raise </span><span class="s1">UsageError</span><span class="s2">(</span><span class="s5">f&quot;</span><span class="s0">{</span><span class="s1">filepath</span><span class="s0">}</span><span class="s5">: </span><span class="s0">{</span><span class="s1">exc</span><span class="s0">}</span><span class="s5">&quot;</span><span class="s2">) </span><span class="s0">from </span><span class="s1">exc</span>
+
+        <span class="s1">result </span><span class="s2">= </span><span class="s1">config</span><span class="s2">.</span><span class="s1">get</span><span class="s2">(</span><span class="s5">&quot;tool&quot;</span><span class="s2">, {}).</span><span class="s1">get</span><span class="s2">(</span><span class="s5">&quot;pytest&quot;</span><span class="s2">, {}).</span><span class="s1">get</span><span class="s2">(</span><span class="s5">&quot;ini_options&quot;</span><span class="s2">, </span><span class="s0">None</span><span class="s2">)</span>
+        <span class="s0">if </span><span class="s1">result </span><span class="s0">is not None</span><span class="s2">:</span>
+            <span class="s4"># TOML supports richer data types than ini files (strings, arrays, floats, ints, etc),</span>
+            <span class="s4"># however we need to convert all scalar values to str for compatibility with the rest</span>
+            <span class="s4"># of the configuration system, which expects strings only.</span>
+            <span class="s0">def </span><span class="s1">make_scalar</span><span class="s2">(</span><span class="s1">v</span><span class="s2">: </span><span class="s1">object</span><span class="s2">) </span><span class="s1">-&gt; Union</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">List</span><span class="s2">[</span><span class="s1">str</span><span class="s2">]]:</span>
+                <span class="s0">return </span><span class="s1">v </span><span class="s0">if </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">v</span><span class="s2">, </span><span class="s1">list</span><span class="s2">) </span><span class="s0">else </span><span class="s1">str</span><span class="s2">(</span><span class="s1">v</span><span class="s2">)</span>
+
+            <span class="s0">return </span><span class="s2">{</span><span class="s1">k</span><span class="s2">: </span><span class="s1">make_scalar</span><span class="s2">(</span><span class="s1">v</span><span class="s2">) </span><span class="s0">for </span><span class="s1">k</span><span class="s2">, </span><span class="s1">v </span><span class="s0">in </span><span class="s1">result</span><span class="s2">.</span><span class="s1">items</span><span class="s2">()}</span>
+
+    <span class="s0">return None</span>
+
+
+<span class="s0">def </span><span class="s1">locate_config</span><span class="s2">(</span>
+    <span class="s1">args</span><span class="s2">: </span><span class="s1">Iterable</span><span class="s2">[</span><span class="s1">Path</span><span class="s2">],</span>
+<span class="s2">) </span><span class="s1">-&gt; Tuple</span><span class="s2">[</span><span class="s1">Optional</span><span class="s2">[</span><span class="s1">Path</span><span class="s2">], </span><span class="s1">Optional</span><span class="s2">[</span><span class="s1">Path</span><span class="s2">], </span><span class="s1">Dict</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">Union</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">List</span><span class="s2">[</span><span class="s1">str</span><span class="s2">]]]]:</span>
+    <span class="s3">&quot;&quot;&quot;Search in the list of arguments for a valid ini-file for pytest, 
+    and return a tuple of (rootdir, inifile, cfg-dict).&quot;&quot;&quot;</span>
+    <span class="s1">config_names </span><span class="s2">= [</span>
+        <span class="s5">&quot;pytest.ini&quot;</span><span class="s2">,</span>
+        <span class="s5">&quot;.pytest.ini&quot;</span><span class="s2">,</span>
+        <span class="s5">&quot;pyproject.toml&quot;</span><span class="s2">,</span>
+        <span class="s5">&quot;tox.ini&quot;</span><span class="s2">,</span>
+        <span class="s5">&quot;setup.cfg&quot;</span><span class="s2">,</span>
+    <span class="s2">]</span>
+    <span class="s1">args </span><span class="s2">= [</span><span class="s1">x </span><span class="s0">for </span><span class="s1">x </span><span class="s0">in </span><span class="s1">args </span><span class="s0">if not </span><span class="s1">str</span><span class="s2">(</span><span class="s1">x</span><span class="s2">).</span><span class="s1">startswith</span><span class="s2">(</span><span class="s5">&quot;-&quot;</span><span class="s2">)]</span>
+    <span class="s0">if not </span><span class="s1">args</span><span class="s2">:</span>
+        <span class="s1">args </span><span class="s2">= [</span><span class="s1">Path</span><span class="s2">.</span><span class="s1">cwd</span><span class="s2">()]</span>
+    <span class="s0">for </span><span class="s1">arg </span><span class="s0">in </span><span class="s1">args</span><span class="s2">:</span>
+        <span class="s1">argpath </span><span class="s2">= </span><span class="s1">absolutepath</span><span class="s2">(</span><span class="s1">arg</span><span class="s2">)</span>
+        <span class="s0">for </span><span class="s1">base </span><span class="s0">in </span><span class="s2">(</span><span class="s1">argpath</span><span class="s2">, *</span><span class="s1">argpath</span><span class="s2">.</span><span class="s1">parents</span><span class="s2">):</span>
+            <span class="s0">for </span><span class="s1">config_name </span><span class="s0">in </span><span class="s1">config_names</span><span class="s2">:</span>
+                <span class="s1">p </span><span class="s2">= </span><span class="s1">base </span><span class="s2">/ </span><span class="s1">config_name</span>
+                <span class="s0">if </span><span class="s1">p</span><span class="s2">.</span><span class="s1">is_file</span><span class="s2">():</span>
+                    <span class="s1">ini_config </span><span class="s2">= </span><span class="s1">load_config_dict_from_file</span><span class="s2">(</span><span class="s1">p</span><span class="s2">)</span>
+                    <span class="s0">if </span><span class="s1">ini_config </span><span class="s0">is not None</span><span class="s2">:</span>
+                        <span class="s0">return </span><span class="s1">base</span><span class="s2">, </span><span class="s1">p</span><span class="s2">, </span><span class="s1">ini_config</span>
+    <span class="s0">return None</span><span class="s2">, </span><span class="s0">None</span><span class="s2">, {}</span>
+
+
+<span class="s0">def </span><span class="s1">get_common_ancestor</span><span class="s2">(</span><span class="s1">paths</span><span class="s2">: </span><span class="s1">Iterable</span><span class="s2">[</span><span class="s1">Path</span><span class="s2">]) </span><span class="s1">-&gt; Path</span><span class="s2">:</span>
+    <span class="s1">common_ancestor</span><span class="s2">: </span><span class="s1">Optional</span><span class="s2">[</span><span class="s1">Path</span><span class="s2">] = </span><span class="s0">None</span>
+    <span class="s0">for </span><span class="s1">path </span><span class="s0">in </span><span class="s1">paths</span><span class="s2">:</span>
+        <span class="s0">if not </span><span class="s1">path</span><span class="s2">.</span><span class="s1">exists</span><span class="s2">():</span>
+            <span class="s0">continue</span>
+        <span class="s0">if </span><span class="s1">common_ancestor </span><span class="s0">is None</span><span class="s2">:</span>
+            <span class="s1">common_ancestor </span><span class="s2">= </span><span class="s1">path</span>
+        <span class="s0">else</span><span class="s2">:</span>
+            <span class="s0">if </span><span class="s1">common_ancestor </span><span class="s0">in </span><span class="s1">path</span><span class="s2">.</span><span class="s1">parents </span><span class="s0">or </span><span class="s1">path </span><span class="s2">== </span><span class="s1">common_ancestor</span><span class="s2">:</span>
+                <span class="s0">continue</span>
+            <span class="s0">elif </span><span class="s1">path </span><span class="s0">in </span><span class="s1">common_ancestor</span><span class="s2">.</span><span class="s1">parents</span><span class="s2">:</span>
+                <span class="s1">common_ancestor </span><span class="s2">= </span><span class="s1">path</span>
+            <span class="s0">else</span><span class="s2">:</span>
+                <span class="s1">shared </span><span class="s2">= </span><span class="s1">commonpath</span><span class="s2">(</span><span class="s1">path</span><span class="s2">, </span><span class="s1">common_ancestor</span><span class="s2">)</span>
+                <span class="s0">if </span><span class="s1">shared </span><span class="s0">is not None</span><span class="s2">:</span>
+                    <span class="s1">common_ancestor </span><span class="s2">= </span><span class="s1">shared</span>
+    <span class="s0">if </span><span class="s1">common_ancestor </span><span class="s0">is None</span><span class="s2">:</span>
+        <span class="s1">common_ancestor </span><span class="s2">= </span><span class="s1">Path</span><span class="s2">.</span><span class="s1">cwd</span><span class="s2">()</span>
+    <span class="s0">elif </span><span class="s1">common_ancestor</span><span class="s2">.</span><span class="s1">is_file</span><span class="s2">():</span>
+        <span class="s1">common_ancestor </span><span class="s2">= </span><span class="s1">common_ancestor</span><span class="s2">.</span><span class="s1">parent</span>
+    <span class="s0">return </span><span class="s1">common_ancestor</span>
+
+
+<span class="s0">def </span><span class="s1">get_dirs_from_args</span><span class="s2">(</span><span class="s1">args</span><span class="s2">: </span><span class="s1">Iterable</span><span class="s2">[</span><span class="s1">str</span><span class="s2">]) </span><span class="s1">-&gt; List</span><span class="s2">[</span><span class="s1">Path</span><span class="s2">]:</span>
+    <span class="s0">def </span><span class="s1">is_option</span><span class="s2">(</span><span class="s1">x</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; bool</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">x</span><span class="s2">.</span><span class="s1">startswith</span><span class="s2">(</span><span class="s5">&quot;-&quot;</span><span class="s2">)</span>
+
+    <span class="s0">def </span><span class="s1">get_file_part_from_node_id</span><span class="s2">(</span><span class="s1">x</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; str</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">x</span><span class="s2">.</span><span class="s1">split</span><span class="s2">(</span><span class="s5">&quot;::&quot;</span><span class="s2">)[</span><span class="s6">0</span><span class="s2">]</span>
+
+    <span class="s0">def </span><span class="s1">get_dir_from_path</span><span class="s2">(</span><span class="s1">path</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">) </span><span class="s1">-&gt; Path</span><span class="s2">:</span>
+        <span class="s0">if </span><span class="s1">path</span><span class="s2">.</span><span class="s1">is_dir</span><span class="s2">():</span>
+            <span class="s0">return </span><span class="s1">path</span>
+        <span class="s0">return </span><span class="s1">path</span><span class="s2">.</span><span class="s1">parent</span>
+
+    <span class="s4"># These look like paths but may not exist</span>
+    <span class="s1">possible_paths </span><span class="s2">= (</span>
+        <span class="s1">absolutepath</span><span class="s2">(</span><span class="s1">get_file_part_from_node_id</span><span class="s2">(</span><span class="s1">arg</span><span class="s2">))</span>
+        <span class="s0">for </span><span class="s1">arg </span><span class="s0">in </span><span class="s1">args</span>
+        <span class="s0">if not </span><span class="s1">is_option</span><span class="s2">(</span><span class="s1">arg</span><span class="s2">)</span>
+    <span class="s2">)</span>
+
+    <span class="s0">return </span><span class="s2">[</span><span class="s1">get_dir_from_path</span><span class="s2">(</span><span class="s1">path</span><span class="s2">) </span><span class="s0">for </span><span class="s1">path </span><span class="s0">in </span><span class="s1">possible_paths </span><span class="s0">if </span><span class="s1">safe_exists</span><span class="s2">(</span><span class="s1">path</span><span class="s2">)]</span>
+
+
+<span class="s1">CFG_PYTEST_SECTION </span><span class="s2">= </span><span class="s5">&quot;[pytest] section in {filename} files is no longer supported, change to [tool:pytest] instead.&quot;</span>
+
+
+<span class="s0">def </span><span class="s1">determine_setup</span><span class="s2">(</span>
+    <span class="s1">inifile</span><span class="s2">: </span><span class="s1">Optional</span><span class="s2">[</span><span class="s1">str</span><span class="s2">],</span>
+    <span class="s1">args</span><span class="s2">: </span><span class="s1">Sequence</span><span class="s2">[</span><span class="s1">str</span><span class="s2">],</span>
+    <span class="s1">rootdir_cmd_arg</span><span class="s2">: </span><span class="s1">Optional</span><span class="s2">[</span><span class="s1">str</span><span class="s2">] = </span><span class="s0">None</span><span class="s2">,</span>
+    <span class="s1">config</span><span class="s2">: </span><span class="s1">Optional</span><span class="s2">[</span><span class="s5">&quot;Config&quot;</span><span class="s2">] = </span><span class="s0">None</span><span class="s2">,</span>
+<span class="s2">) </span><span class="s1">-&gt; Tuple</span><span class="s2">[</span><span class="s1">Path</span><span class="s2">, </span><span class="s1">Optional</span><span class="s2">[</span><span class="s1">Path</span><span class="s2">], </span><span class="s1">Dict</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">Union</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">List</span><span class="s2">[</span><span class="s1">str</span><span class="s2">]]]]:</span>
+    <span class="s1">rootdir </span><span class="s2">= </span><span class="s0">None</span>
+    <span class="s1">dirs </span><span class="s2">= </span><span class="s1">get_dirs_from_args</span><span class="s2">(</span><span class="s1">args</span><span class="s2">)</span>
+    <span class="s0">if </span><span class="s1">inifile</span><span class="s2">:</span>
+        <span class="s1">inipath_ </span><span class="s2">= </span><span class="s1">absolutepath</span><span class="s2">(</span><span class="s1">inifile</span><span class="s2">)</span>
+        <span class="s1">inipath</span><span class="s2">: </span><span class="s1">Optional</span><span class="s2">[</span><span class="s1">Path</span><span class="s2">] = </span><span class="s1">inipath_</span>
+        <span class="s1">inicfg </span><span class="s2">= </span><span class="s1">load_config_dict_from_file</span><span class="s2">(</span><span class="s1">inipath_</span><span class="s2">) </span><span class="s0">or </span><span class="s2">{}</span>
+        <span class="s0">if </span><span class="s1">rootdir_cmd_arg </span><span class="s0">is None</span><span class="s2">:</span>
+            <span class="s1">rootdir </span><span class="s2">= </span><span class="s1">inipath_</span><span class="s2">.</span><span class="s1">parent</span>
+    <span class="s0">else</span><span class="s2">:</span>
+        <span class="s1">ancestor </span><span class="s2">= </span><span class="s1">get_common_ancestor</span><span class="s2">(</span><span class="s1">dirs</span><span class="s2">)</span>
+        <span class="s1">rootdir</span><span class="s2">, </span><span class="s1">inipath</span><span class="s2">, </span><span class="s1">inicfg </span><span class="s2">= </span><span class="s1">locate_config</span><span class="s2">([</span><span class="s1">ancestor</span><span class="s2">])</span>
+        <span class="s0">if </span><span class="s1">rootdir </span><span class="s0">is None and </span><span class="s1">rootdir_cmd_arg </span><span class="s0">is None</span><span class="s2">:</span>
+            <span class="s0">for </span><span class="s1">possible_rootdir </span><span class="s0">in </span><span class="s2">(</span><span class="s1">ancestor</span><span class="s2">, *</span><span class="s1">ancestor</span><span class="s2">.</span><span class="s1">parents</span><span class="s2">):</span>
+                <span class="s0">if </span><span class="s2">(</span><span class="s1">possible_rootdir </span><span class="s2">/ </span><span class="s5">&quot;setup.py&quot;</span><span class="s2">).</span><span class="s1">is_file</span><span class="s2">():</span>
+                    <span class="s1">rootdir </span><span class="s2">= </span><span class="s1">possible_rootdir</span>
+                    <span class="s0">break</span>
+            <span class="s0">else</span><span class="s2">:</span>
+                <span class="s0">if </span><span class="s1">dirs </span><span class="s2">!= [</span><span class="s1">ancestor</span><span class="s2">]:</span>
+                    <span class="s1">rootdir</span><span class="s2">, </span><span class="s1">inipath</span><span class="s2">, </span><span class="s1">inicfg </span><span class="s2">= </span><span class="s1">locate_config</span><span class="s2">(</span><span class="s1">dirs</span><span class="s2">)</span>
+                <span class="s0">if </span><span class="s1">rootdir </span><span class="s0">is None</span><span class="s2">:</span>
+                    <span class="s0">if </span><span class="s1">config </span><span class="s0">is not None</span><span class="s2">:</span>
+                        <span class="s1">cwd </span><span class="s2">= </span><span class="s1">config</span><span class="s2">.</span><span class="s1">invocation_params</span><span class="s2">.</span><span class="s1">dir</span>
+                    <span class="s0">else</span><span class="s2">:</span>
+                        <span class="s1">cwd </span><span class="s2">= </span><span class="s1">Path</span><span class="s2">.</span><span class="s1">cwd</span><span class="s2">()</span>
+                    <span class="s1">rootdir </span><span class="s2">= </span><span class="s1">get_common_ancestor</span><span class="s2">([</span><span class="s1">cwd</span><span class="s2">, </span><span class="s1">ancestor</span><span class="s2">])</span>
+                    <span class="s0">if </span><span class="s1">is_fs_root</span><span class="s2">(</span><span class="s1">rootdir</span><span class="s2">):</span>
+                        <span class="s1">rootdir </span><span class="s2">= </span><span class="s1">ancestor</span>
+    <span class="s0">if </span><span class="s1">rootdir_cmd_arg</span><span class="s2">:</span>
+        <span class="s1">rootdir </span><span class="s2">= </span><span class="s1">absolutepath</span><span class="s2">(</span><span class="s1">os</span><span class="s2">.</span><span class="s1">path</span><span class="s2">.</span><span class="s1">expandvars</span><span class="s2">(</span><span class="s1">rootdir_cmd_arg</span><span class="s2">))</span>
+        <span class="s0">if not </span><span class="s1">rootdir</span><span class="s2">.</span><span class="s1">is_dir</span><span class="s2">():</span>
+            <span class="s0">raise </span><span class="s1">UsageError</span><span class="s2">(</span>
+                <span class="s5">&quot;Directory '{}' not found. Check your '--rootdir' option.&quot;</span><span class="s2">.</span><span class="s1">format</span><span class="s2">(</span>
+                    <span class="s1">rootdir</span>
+                <span class="s2">)</span>
+            <span class="s2">)</span>
+    <span class="s0">assert </span><span class="s1">rootdir </span><span class="s0">is not None</span>
+    <span class="s0">return </span><span class="s1">rootdir</span><span class="s2">, </span><span class="s1">inipath</span><span class="s2">, </span><span class="s1">inicfg </span><span class="s0">or </span><span class="s2">{}</span>
+
+
+<span class="s0">def </span><span class="s1">is_fs_root</span><span class="s2">(</span><span class="s1">p</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">) </span><span class="s1">-&gt; bool</span><span class="s2">:</span>
+    <span class="s3">r&quot;&quot;&quot; 
+    Return True if the given path is pointing to the root of the 
+    file system (&quot;/&quot; on Unix and &quot;C:\\&quot; on Windows for example). 
+    &quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">os</span><span class="s2">.</span><span class="s1">path</span><span class="s2">.</span><span class="s1">splitdrive</span><span class="s2">(</span><span class="s1">str</span><span class="s2">(</span><span class="s1">p</span><span class="s2">))[</span><span class="s6">1</span><span class="s2">] == </span><span class="s1">os</span><span class="s2">.</span><span class="s1">sep</span>
+</pre>
+</body>
+</html>

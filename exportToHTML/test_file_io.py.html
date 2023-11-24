@@ -1,0 +1,220 @@
+<html>
+<head>
+<title>test_file_io.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #6aab73;}
+.s4 { color: #7a7e85;}
+.s5 { color: #2aacb8;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+test_file_io.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">io</span>
+<span class="s0">import </span><span class="s1">os</span>
+<span class="s0">from </span><span class="s1">unittest </span><span class="s0">import </span><span class="s1">mock</span>
+<span class="s0">from </span><span class="s1">unittest</span><span class="s2">.</span><span class="s1">mock </span><span class="s0">import </span><span class="s1">sentinel</span>
+
+<span class="s0">import </span><span class="s1">pytest</span>
+
+<span class="s0">import </span><span class="s1">trio</span>
+<span class="s0">from </span><span class="s1">trio </span><span class="s0">import </span><span class="s1">_core</span>
+<span class="s0">from </span><span class="s1">trio</span><span class="s2">.</span><span class="s1">_file_io </span><span class="s0">import </span><span class="s1">_FILE_ASYNC_METHODS</span><span class="s2">, </span><span class="s1">_FILE_SYNC_ATTRS</span><span class="s2">, </span><span class="s1">AsyncIOWrapper</span>
+
+
+<span class="s2">@</span><span class="s1">pytest</span><span class="s2">.</span><span class="s1">fixture</span>
+<span class="s0">def </span><span class="s1">path</span><span class="s2">(</span><span class="s1">tmpdir</span><span class="s2">):</span>
+    <span class="s0">return </span><span class="s1">os</span><span class="s2">.</span><span class="s1">fspath</span><span class="s2">(</span><span class="s1">tmpdir</span><span class="s2">.</span><span class="s1">join</span><span class="s2">(</span><span class="s3">&quot;test&quot;</span><span class="s2">))</span>
+
+
+<span class="s2">@</span><span class="s1">pytest</span><span class="s2">.</span><span class="s1">fixture</span>
+<span class="s0">def </span><span class="s1">wrapped</span><span class="s2">():</span>
+    <span class="s0">return </span><span class="s1">mock</span><span class="s2">.</span><span class="s1">Mock</span><span class="s2">(</span><span class="s1">spec_set</span><span class="s2">=</span><span class="s1">io</span><span class="s2">.</span><span class="s1">StringIO</span><span class="s2">)</span>
+
+
+<span class="s2">@</span><span class="s1">pytest</span><span class="s2">.</span><span class="s1">fixture</span>
+<span class="s0">def </span><span class="s1">async_file</span><span class="s2">(</span><span class="s1">wrapped</span><span class="s2">):</span>
+    <span class="s0">return </span><span class="s1">trio</span><span class="s2">.</span><span class="s1">wrap_file</span><span class="s2">(</span><span class="s1">wrapped</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">test_wrap_invalid</span><span class="s2">():</span>
+    <span class="s0">with </span><span class="s1">pytest</span><span class="s2">.</span><span class="s1">raises</span><span class="s2">(</span><span class="s1">TypeError</span><span class="s2">):</span>
+        <span class="s1">trio</span><span class="s2">.</span><span class="s1">wrap_file</span><span class="s2">(</span><span class="s3">&quot;&quot;</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">test_wrap_non_iobase</span><span class="s2">():</span>
+    <span class="s0">class </span><span class="s1">FakeFile</span><span class="s2">:</span>
+        <span class="s0">def </span><span class="s1">close</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):  </span><span class="s4"># pragma: no cover</span>
+            <span class="s0">pass</span>
+
+        <span class="s0">def </span><span class="s1">write</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):  </span><span class="s4"># pragma: no cover</span>
+            <span class="s0">pass</span>
+
+    <span class="s1">wrapped </span><span class="s2">= </span><span class="s1">FakeFile</span><span class="s2">()</span>
+    <span class="s0">assert not </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">wrapped</span><span class="s2">, </span><span class="s1">io</span><span class="s2">.</span><span class="s1">IOBase</span><span class="s2">)</span>
+
+    <span class="s1">async_file </span><span class="s2">= </span><span class="s1">trio</span><span class="s2">.</span><span class="s1">wrap_file</span><span class="s2">(</span><span class="s1">wrapped</span><span class="s2">)</span>
+    <span class="s0">assert </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">, </span><span class="s1">AsyncIOWrapper</span><span class="s2">)</span>
+
+    <span class="s0">del </span><span class="s1">FakeFile</span><span class="s2">.</span><span class="s1">write</span>
+
+    <span class="s0">with </span><span class="s1">pytest</span><span class="s2">.</span><span class="s1">raises</span><span class="s2">(</span><span class="s1">TypeError</span><span class="s2">):</span>
+        <span class="s1">trio</span><span class="s2">.</span><span class="s1">wrap_file</span><span class="s2">(</span><span class="s1">FakeFile</span><span class="s2">())</span>
+
+
+<span class="s0">def </span><span class="s1">test_wrapped_property</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">, </span><span class="s1">wrapped</span><span class="s2">):</span>
+    <span class="s0">assert </span><span class="s1">async_file</span><span class="s2">.</span><span class="s1">wrapped </span><span class="s0">is </span><span class="s1">wrapped</span>
+
+
+<span class="s0">def </span><span class="s1">test_dir_matches_wrapped</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">, </span><span class="s1">wrapped</span><span class="s2">):</span>
+    <span class="s1">attrs </span><span class="s2">= </span><span class="s1">_FILE_SYNC_ATTRS</span><span class="s2">.</span><span class="s1">union</span><span class="s2">(</span><span class="s1">_FILE_ASYNC_METHODS</span><span class="s2">)</span>
+
+    <span class="s4"># all supported attrs in wrapped should be available in async_file</span>
+    <span class="s0">assert </span><span class="s1">all</span><span class="s2">(</span><span class="s1">attr </span><span class="s0">in </span><span class="s1">dir</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">) </span><span class="s0">for </span><span class="s1">attr </span><span class="s0">in </span><span class="s1">attrs </span><span class="s0">if </span><span class="s1">attr </span><span class="s0">in </span><span class="s1">dir</span><span class="s2">(</span><span class="s1">wrapped</span><span class="s2">))</span>
+    <span class="s4"># all supported attrs not in wrapped should not be available in async_file</span>
+    <span class="s0">assert not </span><span class="s1">any</span><span class="s2">(</span>
+        <span class="s1">attr </span><span class="s0">in </span><span class="s1">dir</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">) </span><span class="s0">for </span><span class="s1">attr </span><span class="s0">in </span><span class="s1">attrs </span><span class="s0">if </span><span class="s1">attr </span><span class="s0">not in </span><span class="s1">dir</span><span class="s2">(</span><span class="s1">wrapped</span><span class="s2">)</span>
+    <span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">test_unsupported_not_forwarded</span><span class="s2">():</span>
+    <span class="s0">class </span><span class="s1">FakeFile</span><span class="s2">(</span><span class="s1">io</span><span class="s2">.</span><span class="s1">RawIOBase</span><span class="s2">):</span>
+        <span class="s0">def </span><span class="s1">unsupported_attr</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):  </span><span class="s4"># pragma: no cover</span>
+            <span class="s0">pass</span>
+
+    <span class="s1">async_file </span><span class="s2">= </span><span class="s1">trio</span><span class="s2">.</span><span class="s1">wrap_file</span><span class="s2">(</span><span class="s1">FakeFile</span><span class="s2">())</span>
+
+    <span class="s0">assert </span><span class="s1">hasattr</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">.</span><span class="s1">wrapped</span><span class="s2">, </span><span class="s3">&quot;unsupported_attr&quot;</span><span class="s2">)</span>
+
+    <span class="s0">with </span><span class="s1">pytest</span><span class="s2">.</span><span class="s1">raises</span><span class="s2">(</span><span class="s1">AttributeError</span><span class="s2">):</span>
+        <span class="s1">getattr</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">, </span><span class="s3">&quot;unsupported_attr&quot;</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">test_sync_attrs_forwarded</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">, </span><span class="s1">wrapped</span><span class="s2">):</span>
+    <span class="s0">for </span><span class="s1">attr_name </span><span class="s0">in </span><span class="s1">_FILE_SYNC_ATTRS</span><span class="s2">:</span>
+        <span class="s0">if </span><span class="s1">attr_name </span><span class="s0">not in </span><span class="s1">dir</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">):</span>
+            <span class="s0">continue</span>
+
+        <span class="s0">assert </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">, </span><span class="s1">attr_name</span><span class="s2">) </span><span class="s0">is </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">wrapped</span><span class="s2">, </span><span class="s1">attr_name</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">test_sync_attrs_match_wrapper</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">, </span><span class="s1">wrapped</span><span class="s2">):</span>
+    <span class="s0">for </span><span class="s1">attr_name </span><span class="s0">in </span><span class="s1">_FILE_SYNC_ATTRS</span><span class="s2">:</span>
+        <span class="s0">if </span><span class="s1">attr_name </span><span class="s0">in </span><span class="s1">dir</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">):</span>
+            <span class="s0">continue</span>
+
+        <span class="s0">with </span><span class="s1">pytest</span><span class="s2">.</span><span class="s1">raises</span><span class="s2">(</span><span class="s1">AttributeError</span><span class="s2">):</span>
+            <span class="s1">getattr</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">, </span><span class="s1">attr_name</span><span class="s2">)</span>
+
+        <span class="s0">with </span><span class="s1">pytest</span><span class="s2">.</span><span class="s1">raises</span><span class="s2">(</span><span class="s1">AttributeError</span><span class="s2">):</span>
+            <span class="s1">getattr</span><span class="s2">(</span><span class="s1">wrapped</span><span class="s2">, </span><span class="s1">attr_name</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">test_async_methods_generated_once</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">):</span>
+    <span class="s0">for </span><span class="s1">meth_name </span><span class="s0">in </span><span class="s1">_FILE_ASYNC_METHODS</span><span class="s2">:</span>
+        <span class="s0">if </span><span class="s1">meth_name </span><span class="s0">not in </span><span class="s1">dir</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">):</span>
+            <span class="s0">continue</span>
+
+        <span class="s0">assert </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">, </span><span class="s1">meth_name</span><span class="s2">) </span><span class="s0">is </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">, </span><span class="s1">meth_name</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">test_async_methods_signature</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">):</span>
+    <span class="s4"># use read as a representative of all async methods</span>
+    <span class="s0">assert </span><span class="s1">async_file</span><span class="s2">.</span><span class="s1">read</span><span class="s2">.</span><span class="s1">__name__ </span><span class="s2">== </span><span class="s3">&quot;read&quot;</span>
+    <span class="s0">assert </span><span class="s1">async_file</span><span class="s2">.</span><span class="s1">read</span><span class="s2">.</span><span class="s1">__qualname__ </span><span class="s2">== </span><span class="s3">&quot;AsyncIOWrapper.read&quot;</span>
+
+    <span class="s0">assert </span><span class="s3">&quot;io.StringIO.read&quot; </span><span class="s0">in </span><span class="s1">async_file</span><span class="s2">.</span><span class="s1">read</span><span class="s2">.</span><span class="s1">__doc__</span>
+
+
+<span class="s0">async def </span><span class="s1">test_async_methods_wrap</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">, </span><span class="s1">wrapped</span><span class="s2">):</span>
+    <span class="s0">for </span><span class="s1">meth_name </span><span class="s0">in </span><span class="s1">_FILE_ASYNC_METHODS</span><span class="s2">:</span>
+        <span class="s0">if </span><span class="s1">meth_name </span><span class="s0">not in </span><span class="s1">dir</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">):</span>
+            <span class="s0">continue</span>
+
+        <span class="s1">meth </span><span class="s2">= </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">, </span><span class="s1">meth_name</span><span class="s2">)</span>
+        <span class="s1">wrapped_meth </span><span class="s2">= </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">wrapped</span><span class="s2">, </span><span class="s1">meth_name</span><span class="s2">)</span>
+
+        <span class="s1">value </span><span class="s2">= </span><span class="s0">await </span><span class="s1">meth</span><span class="s2">(</span><span class="s1">sentinel</span><span class="s2">.</span><span class="s1">argument</span><span class="s2">, </span><span class="s1">keyword</span><span class="s2">=</span><span class="s1">sentinel</span><span class="s2">.</span><span class="s1">keyword</span><span class="s2">)</span>
+
+        <span class="s1">wrapped_meth</span><span class="s2">.</span><span class="s1">assert_called_once_with</span><span class="s2">(</span>
+            <span class="s1">sentinel</span><span class="s2">.</span><span class="s1">argument</span><span class="s2">, </span><span class="s1">keyword</span><span class="s2">=</span><span class="s1">sentinel</span><span class="s2">.</span><span class="s1">keyword</span>
+        <span class="s2">)</span>
+        <span class="s0">assert </span><span class="s1">value </span><span class="s2">== </span><span class="s1">wrapped_meth</span><span class="s2">()</span>
+
+        <span class="s1">wrapped</span><span class="s2">.</span><span class="s1">reset_mock</span><span class="s2">()</span>
+
+
+<span class="s0">async def </span><span class="s1">test_async_methods_match_wrapper</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">, </span><span class="s1">wrapped</span><span class="s2">):</span>
+    <span class="s0">for </span><span class="s1">meth_name </span><span class="s0">in </span><span class="s1">_FILE_ASYNC_METHODS</span><span class="s2">:</span>
+        <span class="s0">if </span><span class="s1">meth_name </span><span class="s0">in </span><span class="s1">dir</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">):</span>
+            <span class="s0">continue</span>
+
+        <span class="s0">with </span><span class="s1">pytest</span><span class="s2">.</span><span class="s1">raises</span><span class="s2">(</span><span class="s1">AttributeError</span><span class="s2">):</span>
+            <span class="s1">getattr</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">, </span><span class="s1">meth_name</span><span class="s2">)</span>
+
+        <span class="s0">with </span><span class="s1">pytest</span><span class="s2">.</span><span class="s1">raises</span><span class="s2">(</span><span class="s1">AttributeError</span><span class="s2">):</span>
+            <span class="s1">getattr</span><span class="s2">(</span><span class="s1">wrapped</span><span class="s2">, </span><span class="s1">meth_name</span><span class="s2">)</span>
+
+
+<span class="s0">async def </span><span class="s1">test_open</span><span class="s2">(</span><span class="s1">path</span><span class="s2">):</span>
+    <span class="s1">f </span><span class="s2">= </span><span class="s0">await </span><span class="s1">trio</span><span class="s2">.</span><span class="s1">open_file</span><span class="s2">(</span><span class="s1">path</span><span class="s2">, </span><span class="s3">&quot;w&quot;</span><span class="s2">)</span>
+
+    <span class="s0">assert </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">f</span><span class="s2">, </span><span class="s1">AsyncIOWrapper</span><span class="s2">)</span>
+
+    <span class="s0">await </span><span class="s1">f</span><span class="s2">.</span><span class="s1">aclose</span><span class="s2">()</span>
+
+
+<span class="s0">async def </span><span class="s1">test_open_context_manager</span><span class="s2">(</span><span class="s1">path</span><span class="s2">):</span>
+    <span class="s0">async with await </span><span class="s1">trio</span><span class="s2">.</span><span class="s1">open_file</span><span class="s2">(</span><span class="s1">path</span><span class="s2">, </span><span class="s3">&quot;w&quot;</span><span class="s2">) </span><span class="s0">as </span><span class="s1">f</span><span class="s2">:</span>
+        <span class="s0">assert </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">f</span><span class="s2">, </span><span class="s1">AsyncIOWrapper</span><span class="s2">)</span>
+        <span class="s0">assert not </span><span class="s1">f</span><span class="s2">.</span><span class="s1">closed</span>
+
+    <span class="s0">assert </span><span class="s1">f</span><span class="s2">.</span><span class="s1">closed</span>
+
+
+<span class="s0">async def </span><span class="s1">test_async_iter</span><span class="s2">():</span>
+    <span class="s1">async_file </span><span class="s2">= </span><span class="s1">trio</span><span class="s2">.</span><span class="s1">wrap_file</span><span class="s2">(</span><span class="s1">io</span><span class="s2">.</span><span class="s1">StringIO</span><span class="s2">(</span><span class="s3">&quot;test</span><span class="s0">\n</span><span class="s3">foo</span><span class="s0">\n</span><span class="s3">bar&quot;</span><span class="s2">))</span>
+    <span class="s1">expected </span><span class="s2">= </span><span class="s1">list</span><span class="s2">(</span><span class="s1">async_file</span><span class="s2">.</span><span class="s1">wrapped</span><span class="s2">)</span>
+    <span class="s1">result </span><span class="s2">= []</span>
+    <span class="s1">async_file</span><span class="s2">.</span><span class="s1">wrapped</span><span class="s2">.</span><span class="s1">seek</span><span class="s2">(</span><span class="s5">0</span><span class="s2">)</span>
+
+    <span class="s0">async for </span><span class="s1">line </span><span class="s0">in </span><span class="s1">async_file</span><span class="s2">:</span>
+        <span class="s1">result</span><span class="s2">.</span><span class="s1">append</span><span class="s2">(</span><span class="s1">line</span><span class="s2">)</span>
+
+    <span class="s0">assert </span><span class="s1">result </span><span class="s2">== </span><span class="s1">expected</span>
+
+
+<span class="s0">async def </span><span class="s1">test_aclose_cancelled</span><span class="s2">(</span><span class="s1">path</span><span class="s2">):</span>
+    <span class="s0">with </span><span class="s1">_core</span><span class="s2">.</span><span class="s1">CancelScope</span><span class="s2">() </span><span class="s0">as </span><span class="s1">cscope</span><span class="s2">:</span>
+        <span class="s1">f </span><span class="s2">= </span><span class="s0">await </span><span class="s1">trio</span><span class="s2">.</span><span class="s1">open_file</span><span class="s2">(</span><span class="s1">path</span><span class="s2">, </span><span class="s3">&quot;w&quot;</span><span class="s2">)</span>
+        <span class="s1">cscope</span><span class="s2">.</span><span class="s1">cancel</span><span class="s2">()</span>
+
+        <span class="s0">with </span><span class="s1">pytest</span><span class="s2">.</span><span class="s1">raises</span><span class="s2">(</span><span class="s1">_core</span><span class="s2">.</span><span class="s1">Cancelled</span><span class="s2">):</span>
+            <span class="s0">await </span><span class="s1">f</span><span class="s2">.</span><span class="s1">write</span><span class="s2">(</span><span class="s3">&quot;a&quot;</span><span class="s2">)</span>
+
+        <span class="s0">with </span><span class="s1">pytest</span><span class="s2">.</span><span class="s1">raises</span><span class="s2">(</span><span class="s1">_core</span><span class="s2">.</span><span class="s1">Cancelled</span><span class="s2">):</span>
+            <span class="s0">await </span><span class="s1">f</span><span class="s2">.</span><span class="s1">aclose</span><span class="s2">()</span>
+
+    <span class="s0">assert </span><span class="s1">f</span><span class="s2">.</span><span class="s1">closed</span>
+
+
+<span class="s0">async def </span><span class="s1">test_detach_rewraps_asynciobase</span><span class="s2">():</span>
+    <span class="s1">raw </span><span class="s2">= </span><span class="s1">io</span><span class="s2">.</span><span class="s1">BytesIO</span><span class="s2">()</span>
+    <span class="s1">buffered </span><span class="s2">= </span><span class="s1">io</span><span class="s2">.</span><span class="s1">BufferedReader</span><span class="s2">(</span><span class="s1">raw</span><span class="s2">)</span>
+
+    <span class="s1">async_file </span><span class="s2">= </span><span class="s1">trio</span><span class="s2">.</span><span class="s1">wrap_file</span><span class="s2">(</span><span class="s1">buffered</span><span class="s2">)</span>
+
+    <span class="s1">detached </span><span class="s2">= </span><span class="s0">await </span><span class="s1">async_file</span><span class="s2">.</span><span class="s1">detach</span><span class="s2">()</span>
+
+    <span class="s0">assert </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">detached</span><span class="s2">, </span><span class="s1">AsyncIOWrapper</span><span class="s2">)</span>
+    <span class="s0">assert </span><span class="s1">detached</span><span class="s2">.</span><span class="s1">wrapped </span><span class="s0">is </span><span class="s1">raw</span>
+</pre>
+</body>
+</html>

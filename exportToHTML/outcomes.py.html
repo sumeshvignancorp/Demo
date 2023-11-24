@@ -1,0 +1,334 @@
+<html>
+<head>
+<title>outcomes.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5f826b; font-style: italic;}
+.s1 { color: #bcbec4;}
+.s2 { color: #cf8e6d;}
+.s3 { color: #bcbec4;}
+.s4 { color: #7a7e85;}
+.s5 { color: #6aab73;}
+.s6 { color: #2aacb8;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+outcomes.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot;Exception classes and constants handling test outcomes as well as 
+functions creating them.&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">warnings</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Any</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Callable</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">cast</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">NoReturn</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Optional</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Type</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">TypeVar</span>
+
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">deprecated </span><span class="s2">import </span><span class="s1">KEYWORD_MSG_ARG</span>
+
+<span class="s1">TYPE_CHECKING </span><span class="s3">= </span><span class="s2">False  </span><span class="s4"># Avoid circular import through compat.</span>
+
+<span class="s2">if </span><span class="s1">TYPE_CHECKING</span><span class="s3">:</span>
+    <span class="s2">from </span><span class="s1">typing_extensions </span><span class="s2">import </span><span class="s1">Protocol</span>
+<span class="s2">else</span><span class="s3">:</span>
+    <span class="s4"># typing.Protocol is only available starting from Python 3.8. It is also</span>
+    <span class="s4"># available from typing_extensions, but we don't want a runtime dependency</span>
+    <span class="s4"># on that. So use a dummy runtime implementation.</span>
+    <span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Generic</span>
+
+    <span class="s1">Protocol </span><span class="s3">= </span><span class="s1">Generic</span>
+
+
+<span class="s2">class </span><span class="s1">OutcomeException</span><span class="s3">(</span><span class="s1">BaseException</span><span class="s3">):</span>
+    <span class="s0">&quot;&quot;&quot;OutcomeException and its subclass instances indicate and contain info 
+    about test and collection outcomes.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">msg</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">str</span><span class="s3">] = </span><span class="s2">None</span><span class="s3">, </span><span class="s1">pytrace</span><span class="s3">: </span><span class="s1">bool </span><span class="s3">= </span><span class="s2">True</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">if </span><span class="s1">msg </span><span class="s2">is not None and not </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">msg</span><span class="s3">, </span><span class="s1">str</span><span class="s3">):</span>
+            <span class="s1">error_msg </span><span class="s3">= (  </span><span class="s4"># type: ignore[unreachable]</span>
+                <span class="s5">&quot;{} expected string as 'msg' parameter, got '{}' instead.</span><span class="s2">\n</span><span class="s5">&quot;</span>
+                <span class="s5">&quot;Perhaps you meant to use a mark?&quot;</span>
+            <span class="s3">)</span>
+            <span class="s2">raise </span><span class="s1">TypeError</span><span class="s3">(</span><span class="s1">error_msg</span><span class="s3">.</span><span class="s1">format</span><span class="s3">(</span><span class="s1">type</span><span class="s3">(</span><span class="s1">self</span><span class="s3">).</span><span class="s1">__name__</span><span class="s3">, </span><span class="s1">type</span><span class="s3">(</span><span class="s1">msg</span><span class="s3">).</span><span class="s1">__name__</span><span class="s3">))</span>
+        <span class="s1">super</span><span class="s3">().</span><span class="s1">__init__</span><span class="s3">(</span><span class="s1">msg</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">msg </span><span class="s3">= </span><span class="s1">msg</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">pytrace </span><span class="s3">= </span><span class="s1">pytrace</span>
+
+    <span class="s2">def </span><span class="s1">__repr__</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">msg </span><span class="s2">is not None</span><span class="s3">:</span>
+            <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">msg</span>
+        <span class="s2">return </span><span class="s5">f&quot;&lt;</span><span class="s2">{</span><span class="s1">self</span><span class="s3">.</span><span class="s1">__class__</span><span class="s3">.</span><span class="s1">__name__</span><span class="s2">} </span><span class="s5">instance&gt;&quot;</span>
+
+    <span class="s1">__str__ </span><span class="s3">= </span><span class="s1">__repr__</span>
+
+
+<span class="s1">TEST_OUTCOME </span><span class="s3">= (</span><span class="s1">OutcomeException</span><span class="s3">, </span><span class="s1">Exception</span><span class="s3">)</span>
+
+
+<span class="s2">class </span><span class="s1">Skipped</span><span class="s3">(</span><span class="s1">OutcomeException</span><span class="s3">):</span>
+    <span class="s4"># XXX hackish: on 3k we fake to live in the builtins</span>
+    <span class="s4"># in order to have Skipped exception printing shorter/nicer</span>
+    <span class="s1">__module__ </span><span class="s3">= </span><span class="s5">&quot;builtins&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__</span><span class="s3">(</span>
+        <span class="s1">self</span><span class="s3">,</span>
+        <span class="s1">msg</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">str</span><span class="s3">] = </span><span class="s2">None</span><span class="s3">,</span>
+        <span class="s1">pytrace</span><span class="s3">: </span><span class="s1">bool </span><span class="s3">= </span><span class="s2">True</span><span class="s3">,</span>
+        <span class="s1">allow_module_level</span><span class="s3">: </span><span class="s1">bool </span><span class="s3">= </span><span class="s2">False</span><span class="s3">,</span>
+        <span class="s3">*,</span>
+        <span class="s1">_use_item_location</span><span class="s3">: </span><span class="s1">bool </span><span class="s3">= </span><span class="s2">False</span><span class="s3">,</span>
+    <span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">super</span><span class="s3">().</span><span class="s1">__init__</span><span class="s3">(</span><span class="s1">msg</span><span class="s3">=</span><span class="s1">msg</span><span class="s3">, </span><span class="s1">pytrace</span><span class="s3">=</span><span class="s1">pytrace</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">allow_module_level </span><span class="s3">= </span><span class="s1">allow_module_level</span>
+        <span class="s4"># If true, the skip location is reported as the item's location,</span>
+        <span class="s4"># instead of the place that raises the exception/calls skip().</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_use_item_location </span><span class="s3">= </span><span class="s1">_use_item_location</span>
+
+
+<span class="s2">class </span><span class="s1">Failed</span><span class="s3">(</span><span class="s1">OutcomeException</span><span class="s3">):</span>
+    <span class="s0">&quot;&quot;&quot;Raised from an explicit call to pytest.fail().&quot;&quot;&quot;</span>
+
+    <span class="s1">__module__ </span><span class="s3">= </span><span class="s5">&quot;builtins&quot;</span>
+
+
+<span class="s2">class </span><span class="s1">Exit</span><span class="s3">(</span><span class="s1">Exception</span><span class="s3">):</span>
+    <span class="s0">&quot;&quot;&quot;Raised for immediate program exits (no tracebacks/summaries).&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__</span><span class="s3">(</span>
+        <span class="s1">self</span><span class="s3">, </span><span class="s1">msg</span><span class="s3">: </span><span class="s1">str </span><span class="s3">= </span><span class="s5">&quot;unknown reason&quot;</span><span class="s3">, </span><span class="s1">returncode</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">int</span><span class="s3">] = </span><span class="s2">None</span>
+    <span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">msg </span><span class="s3">= </span><span class="s1">msg</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">returncode </span><span class="s3">= </span><span class="s1">returncode</span>
+        <span class="s1">super</span><span class="s3">().</span><span class="s1">__init__</span><span class="s3">(</span><span class="s1">msg</span><span class="s3">)</span>
+
+
+<span class="s4"># Elaborate hack to work around https://github.com/python/mypy/issues/2087.</span>
+<span class="s4"># Ideally would just be `exit.Exception = Exit` etc.</span>
+
+<span class="s1">_F </span><span class="s3">= </span><span class="s1">TypeVar</span><span class="s3">(</span><span class="s5">&quot;_F&quot;</span><span class="s3">, </span><span class="s1">bound</span><span class="s3">=</span><span class="s1">Callable</span><span class="s3">[..., </span><span class="s1">object</span><span class="s3">])</span>
+<span class="s1">_ET </span><span class="s3">= </span><span class="s1">TypeVar</span><span class="s3">(</span><span class="s5">&quot;_ET&quot;</span><span class="s3">, </span><span class="s1">bound</span><span class="s3">=</span><span class="s1">Type</span><span class="s3">[</span><span class="s1">BaseException</span><span class="s3">])</span>
+
+
+<span class="s2">class </span><span class="s1">_WithException</span><span class="s3">(</span><span class="s1">Protocol</span><span class="s3">[</span><span class="s1">_F</span><span class="s3">, </span><span class="s1">_ET</span><span class="s3">]):</span>
+    <span class="s1">Exception</span><span class="s3">: </span><span class="s1">_ET</span>
+    <span class="s1">__call__</span><span class="s3">: </span><span class="s1">_F</span>
+
+
+<span class="s2">def </span><span class="s1">_with_exception</span><span class="s3">(</span><span class="s1">exception_type</span><span class="s3">: </span><span class="s1">_ET</span><span class="s3">) </span><span class="s1">-&gt; Callable</span><span class="s3">[[</span><span class="s1">_F</span><span class="s3">], </span><span class="s1">_WithException</span><span class="s3">[</span><span class="s1">_F</span><span class="s3">, </span><span class="s1">_ET</span><span class="s3">]]:</span>
+    <span class="s2">def </span><span class="s1">decorate</span><span class="s3">(</span><span class="s1">func</span><span class="s3">: </span><span class="s1">_F</span><span class="s3">) </span><span class="s1">-&gt; _WithException</span><span class="s3">[</span><span class="s1">_F</span><span class="s3">, </span><span class="s1">_ET</span><span class="s3">]:</span>
+        <span class="s1">func_with_exception </span><span class="s3">= </span><span class="s1">cast</span><span class="s3">(</span><span class="s1">_WithException</span><span class="s3">[</span><span class="s1">_F</span><span class="s3">, </span><span class="s1">_ET</span><span class="s3">], </span><span class="s1">func</span><span class="s3">)</span>
+        <span class="s1">func_with_exception</span><span class="s3">.</span><span class="s1">Exception </span><span class="s3">= </span><span class="s1">exception_type</span>
+        <span class="s2">return </span><span class="s1">func_with_exception</span>
+
+    <span class="s2">return </span><span class="s1">decorate</span>
+
+
+<span class="s4"># Exposed helper methods.</span>
+
+
+<span class="s3">@</span><span class="s1">_with_exception</span><span class="s3">(</span><span class="s1">Exit</span><span class="s3">)</span>
+<span class="s2">def </span><span class="s1">exit</span><span class="s3">(</span>
+    <span class="s1">reason</span><span class="s3">: </span><span class="s1">str </span><span class="s3">= </span><span class="s5">&quot;&quot;</span><span class="s3">, </span><span class="s1">returncode</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">int</span><span class="s3">] = </span><span class="s2">None</span><span class="s3">, *, </span><span class="s1">msg</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">str</span><span class="s3">] = </span><span class="s2">None</span>
+<span class="s3">) </span><span class="s1">-&gt; NoReturn</span><span class="s3">:</span>
+    <span class="s0">&quot;&quot;&quot;Exit testing process. 
+ 
+    :param reason: 
+        The message to show as the reason for exiting pytest.  reason has a default value 
+        only because `msg` is deprecated. 
+ 
+    :param returncode: 
+        Return code to be used when exiting pytest. 
+ 
+    :param msg: 
+        Same as ``reason``, but deprecated. Will be removed in a future version, use ``reason`` instead. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">__tracebackhide__ </span><span class="s3">= </span><span class="s2">True</span>
+    <span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">config </span><span class="s2">import </span><span class="s1">UsageError</span>
+
+    <span class="s2">if </span><span class="s1">reason </span><span class="s2">and </span><span class="s1">msg</span><span class="s3">:</span>
+        <span class="s2">raise </span><span class="s1">UsageError</span><span class="s3">(</span>
+            <span class="s5">&quot;cannot pass reason and msg to exit(), `msg` is deprecated, use `reason`.&quot;</span>
+        <span class="s3">)</span>
+    <span class="s2">if not </span><span class="s1">reason</span><span class="s3">:</span>
+        <span class="s2">if </span><span class="s1">msg </span><span class="s2">is None</span><span class="s3">:</span>
+            <span class="s2">raise </span><span class="s1">UsageError</span><span class="s3">(</span><span class="s5">&quot;exit() requires a reason argument&quot;</span><span class="s3">)</span>
+        <span class="s1">warnings</span><span class="s3">.</span><span class="s1">warn</span><span class="s3">(</span><span class="s1">KEYWORD_MSG_ARG</span><span class="s3">.</span><span class="s1">format</span><span class="s3">(</span><span class="s1">func</span><span class="s3">=</span><span class="s5">&quot;exit&quot;</span><span class="s3">), </span><span class="s1">stacklevel</span><span class="s3">=</span><span class="s6">2</span><span class="s3">)</span>
+        <span class="s1">reason </span><span class="s3">= </span><span class="s1">msg</span>
+    <span class="s2">raise </span><span class="s1">Exit</span><span class="s3">(</span><span class="s1">reason</span><span class="s3">, </span><span class="s1">returncode</span><span class="s3">)</span>
+
+
+<span class="s3">@</span><span class="s1">_with_exception</span><span class="s3">(</span><span class="s1">Skipped</span><span class="s3">)</span>
+<span class="s2">def </span><span class="s1">skip</span><span class="s3">(</span>
+    <span class="s1">reason</span><span class="s3">: </span><span class="s1">str </span><span class="s3">= </span><span class="s5">&quot;&quot;</span><span class="s3">, *, </span><span class="s1">allow_module_level</span><span class="s3">: </span><span class="s1">bool </span><span class="s3">= </span><span class="s2">False</span><span class="s3">, </span><span class="s1">msg</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">str</span><span class="s3">] = </span><span class="s2">None</span>
+<span class="s3">) </span><span class="s1">-&gt; NoReturn</span><span class="s3">:</span>
+    <span class="s0">&quot;&quot;&quot;Skip an executing test with the given message. 
+ 
+    This function should be called only during testing (setup, call or teardown) or 
+    during collection by using the ``allow_module_level`` flag.  This function can 
+    be called in doctests as well. 
+ 
+    :param reason: 
+        The message to show the user as reason for the skip. 
+ 
+    :param allow_module_level: 
+        Allows this function to be called at module level. 
+        Raising the skip exception at module level will stop 
+        the execution of the module and prevent the collection of all tests in the module, 
+        even those defined before the `skip` call. 
+ 
+        Defaults to False. 
+ 
+    :param msg: 
+        Same as ``reason``, but deprecated. Will be removed in a future version, use ``reason`` instead. 
+ 
+    .. note:: 
+        It is better to use the :ref:`pytest.mark.skipif ref` marker when 
+        possible to declare a test to be skipped under certain conditions 
+        like mismatching platforms or dependencies. 
+        Similarly, use the ``# doctest: +SKIP`` directive (see :py:data:`doctest.SKIP`) 
+        to skip a doctest statically. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">__tracebackhide__ </span><span class="s3">= </span><span class="s2">True</span>
+    <span class="s1">reason </span><span class="s3">= </span><span class="s1">_resolve_msg_to_reason</span><span class="s3">(</span><span class="s5">&quot;skip&quot;</span><span class="s3">, </span><span class="s1">reason</span><span class="s3">, </span><span class="s1">msg</span><span class="s3">)</span>
+    <span class="s2">raise </span><span class="s1">Skipped</span><span class="s3">(</span><span class="s1">msg</span><span class="s3">=</span><span class="s1">reason</span><span class="s3">, </span><span class="s1">allow_module_level</span><span class="s3">=</span><span class="s1">allow_module_level</span><span class="s3">)</span>
+
+
+<span class="s3">@</span><span class="s1">_with_exception</span><span class="s3">(</span><span class="s1">Failed</span><span class="s3">)</span>
+<span class="s2">def </span><span class="s1">fail</span><span class="s3">(</span><span class="s1">reason</span><span class="s3">: </span><span class="s1">str </span><span class="s3">= </span><span class="s5">&quot;&quot;</span><span class="s3">, </span><span class="s1">pytrace</span><span class="s3">: </span><span class="s1">bool </span><span class="s3">= </span><span class="s2">True</span><span class="s3">, </span><span class="s1">msg</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">str</span><span class="s3">] = </span><span class="s2">None</span><span class="s3">) </span><span class="s1">-&gt; NoReturn</span><span class="s3">:</span>
+    <span class="s0">&quot;&quot;&quot;Explicitly fail an executing test with the given message. 
+ 
+    :param reason: 
+        The message to show the user as reason for the failure. 
+ 
+    :param pytrace: 
+        If False, msg represents the full failure information and no 
+        python traceback will be reported. 
+ 
+    :param msg: 
+        Same as ``reason``, but deprecated. Will be removed in a future version, use ``reason`` instead. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">__tracebackhide__ </span><span class="s3">= </span><span class="s2">True</span>
+    <span class="s1">reason </span><span class="s3">= </span><span class="s1">_resolve_msg_to_reason</span><span class="s3">(</span><span class="s5">&quot;fail&quot;</span><span class="s3">, </span><span class="s1">reason</span><span class="s3">, </span><span class="s1">msg</span><span class="s3">)</span>
+    <span class="s2">raise </span><span class="s1">Failed</span><span class="s3">(</span><span class="s1">msg</span><span class="s3">=</span><span class="s1">reason</span><span class="s3">, </span><span class="s1">pytrace</span><span class="s3">=</span><span class="s1">pytrace</span><span class="s3">)</span>
+
+
+<span class="s2">def </span><span class="s1">_resolve_msg_to_reason</span><span class="s3">(</span>
+    <span class="s1">func_name</span><span class="s3">: </span><span class="s1">str</span><span class="s3">, </span><span class="s1">reason</span><span class="s3">: </span><span class="s1">str</span><span class="s3">, </span><span class="s1">msg</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">str</span><span class="s3">] = </span><span class="s2">None</span>
+<span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Handles converting the deprecated msg parameter if provided into 
+    reason, raising a deprecation warning.  This function will be removed 
+    when the optional msg argument is removed from here in future. 
+ 
+    :param str func_name: 
+        The name of the offending function, this is formatted into the deprecation message. 
+ 
+    :param str reason: 
+        The reason= passed into either pytest.fail() or pytest.skip() 
+ 
+    :param str msg: 
+        The msg= passed into either pytest.fail() or pytest.skip().  This will 
+        be converted into reason if it is provided to allow pytest.skip(msg=) or 
+        pytest.fail(msg=) to continue working in the interim period. 
+ 
+    :returns: 
+        The value to use as reason. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">__tracebackhide__ </span><span class="s3">= </span><span class="s2">True</span>
+    <span class="s2">if </span><span class="s1">msg </span><span class="s2">is not None</span><span class="s3">:</span>
+        <span class="s2">if </span><span class="s1">reason</span><span class="s3">:</span>
+            <span class="s2">from </span><span class="s1">pytest </span><span class="s2">import </span><span class="s1">UsageError</span>
+
+            <span class="s2">raise </span><span class="s1">UsageError</span><span class="s3">(</span>
+                <span class="s5">f&quot;Passing both ``reason`` and ``msg`` to pytest.</span><span class="s2">{</span><span class="s1">func_name</span><span class="s2">}</span><span class="s5">(...) is not permitted.&quot;</span>
+            <span class="s3">)</span>
+        <span class="s1">warnings</span><span class="s3">.</span><span class="s1">warn</span><span class="s3">(</span><span class="s1">KEYWORD_MSG_ARG</span><span class="s3">.</span><span class="s1">format</span><span class="s3">(</span><span class="s1">func</span><span class="s3">=</span><span class="s1">func_name</span><span class="s3">), </span><span class="s1">stacklevel</span><span class="s3">=</span><span class="s6">3</span><span class="s3">)</span>
+        <span class="s1">reason </span><span class="s3">= </span><span class="s1">msg</span>
+    <span class="s2">return </span><span class="s1">reason</span>
+
+
+<span class="s2">class </span><span class="s1">XFailed</span><span class="s3">(</span><span class="s1">Failed</span><span class="s3">):</span>
+    <span class="s0">&quot;&quot;&quot;Raised from an explicit call to pytest.xfail().&quot;&quot;&quot;</span>
+
+
+<span class="s3">@</span><span class="s1">_with_exception</span><span class="s3">(</span><span class="s1">XFailed</span><span class="s3">)</span>
+<span class="s2">def </span><span class="s1">xfail</span><span class="s3">(</span><span class="s1">reason</span><span class="s3">: </span><span class="s1">str </span><span class="s3">= </span><span class="s5">&quot;&quot;</span><span class="s3">) </span><span class="s1">-&gt; NoReturn</span><span class="s3">:</span>
+    <span class="s0">&quot;&quot;&quot;Imperatively xfail an executing test or setup function with the given reason. 
+ 
+    This function should be called only during testing (setup, call or teardown). 
+ 
+    :param reason: 
+        The message to show the user as reason for the xfail. 
+ 
+    .. note:: 
+        It is better to use the :ref:`pytest.mark.xfail ref` marker when 
+        possible to declare a test to be xfailed under certain conditions 
+        like known bugs or missing features. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">__tracebackhide__ </span><span class="s3">= </span><span class="s2">True</span>
+    <span class="s2">raise </span><span class="s1">XFailed</span><span class="s3">(</span><span class="s1">reason</span><span class="s3">)</span>
+
+
+<span class="s2">def </span><span class="s1">importorskip</span><span class="s3">(</span>
+    <span class="s1">modname</span><span class="s3">: </span><span class="s1">str</span><span class="s3">, </span><span class="s1">minversion</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">str</span><span class="s3">] = </span><span class="s2">None</span><span class="s3">, </span><span class="s1">reason</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">str</span><span class="s3">] = </span><span class="s2">None</span>
+<span class="s3">) </span><span class="s1">-&gt; Any</span><span class="s3">:</span>
+    <span class="s0">&quot;&quot;&quot;Import and return the requested module ``modname``, or skip the 
+    current test if the module cannot be imported. 
+ 
+    :param modname: 
+        The name of the module to import. 
+    :param minversion: 
+        If given, the imported module's ``__version__`` attribute must be at 
+        least this minimal version, otherwise the test is still skipped. 
+    :param reason: 
+        If given, this reason is shown as the message when the module cannot 
+        be imported. 
+ 
+    :returns: 
+        The imported module. This should be assigned to its canonical name. 
+ 
+    Example:: 
+ 
+        docutils = pytest.importorskip(&quot;docutils&quot;) 
+    &quot;&quot;&quot;</span>
+    <span class="s2">import </span><span class="s1">warnings</span>
+
+    <span class="s1">__tracebackhide__ </span><span class="s3">= </span><span class="s2">True</span>
+    <span class="s1">compile</span><span class="s3">(</span><span class="s1">modname</span><span class="s3">, </span><span class="s5">&quot;&quot;</span><span class="s3">, </span><span class="s5">&quot;eval&quot;</span><span class="s3">)  </span><span class="s4"># to catch syntaxerrors</span>
+
+    <span class="s2">with </span><span class="s1">warnings</span><span class="s3">.</span><span class="s1">catch_warnings</span><span class="s3">():</span>
+        <span class="s4"># Make sure to ignore ImportWarnings that might happen because</span>
+        <span class="s4"># of existing directories with the same name we're trying to</span>
+        <span class="s4"># import but without a __init__.py file.</span>
+        <span class="s1">warnings</span><span class="s3">.</span><span class="s1">simplefilter</span><span class="s3">(</span><span class="s5">&quot;ignore&quot;</span><span class="s3">)</span>
+        <span class="s2">try</span><span class="s3">:</span>
+            <span class="s1">__import__</span><span class="s3">(</span><span class="s1">modname</span><span class="s3">)</span>
+        <span class="s2">except </span><span class="s1">ImportError </span><span class="s2">as </span><span class="s1">exc</span><span class="s3">:</span>
+            <span class="s2">if </span><span class="s1">reason </span><span class="s2">is None</span><span class="s3">:</span>
+                <span class="s1">reason </span><span class="s3">= </span><span class="s5">f&quot;could not import </span><span class="s2">{</span><span class="s1">modname</span><span class="s2">!r}</span><span class="s5">: </span><span class="s2">{</span><span class="s1">exc</span><span class="s2">}</span><span class="s5">&quot;</span>
+            <span class="s2">raise </span><span class="s1">Skipped</span><span class="s3">(</span><span class="s1">reason</span><span class="s3">, </span><span class="s1">allow_module_level</span><span class="s3">=</span><span class="s2">True</span><span class="s3">) </span><span class="s2">from None</span>
+    <span class="s1">mod </span><span class="s3">= </span><span class="s1">sys</span><span class="s3">.</span><span class="s1">modules</span><span class="s3">[</span><span class="s1">modname</span><span class="s3">]</span>
+    <span class="s2">if </span><span class="s1">minversion </span><span class="s2">is None</span><span class="s3">:</span>
+        <span class="s2">return </span><span class="s1">mod</span>
+    <span class="s1">verattr </span><span class="s3">= </span><span class="s1">getattr</span><span class="s3">(</span><span class="s1">mod</span><span class="s3">, </span><span class="s5">&quot;__version__&quot;</span><span class="s3">, </span><span class="s2">None</span><span class="s3">)</span>
+    <span class="s2">if </span><span class="s1">minversion </span><span class="s2">is not None</span><span class="s3">:</span>
+        <span class="s4"># Imported lazily to improve start-up time.</span>
+        <span class="s2">from </span><span class="s1">packaging</span><span class="s3">.</span><span class="s1">version </span><span class="s2">import </span><span class="s1">Version</span>
+
+        <span class="s2">if </span><span class="s1">verattr </span><span class="s2">is None or </span><span class="s1">Version</span><span class="s3">(</span><span class="s1">verattr</span><span class="s3">) &lt; </span><span class="s1">Version</span><span class="s3">(</span><span class="s1">minversion</span><span class="s3">):</span>
+            <span class="s2">raise </span><span class="s1">Skipped</span><span class="s3">(</span>
+                <span class="s5">&quot;module %r has __version__ %r, required is: %r&quot;</span>
+                <span class="s3">% (</span><span class="s1">modname</span><span class="s3">, </span><span class="s1">verattr</span><span class="s3">, </span><span class="s1">minversion</span><span class="s3">),</span>
+                <span class="s1">allow_module_level</span><span class="s3">=</span><span class="s2">True</span><span class="s3">,</span>
+            <span class="s3">)</span>
+    <span class="s2">return </span><span class="s1">mod</span>
+</pre>
+</body>
+</html>

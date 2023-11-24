@@ -1,0 +1,98 @@
+<html>
+<head>
+<title>pytester_assertions.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5f826b; font-style: italic;}
+.s1 { color: #bcbec4;}
+.s2 { color: #7a7e85;}
+.s3 { color: #cf8e6d;}
+.s4 { color: #bcbec4;}
+.s5 { color: #2aacb8;}
+.s6 { color: #6aab73;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+pytester_assertions.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot;Helper plugin for pytester; should not be loaded on its own.&quot;&quot;&quot;</span>
+<span class="s2"># This plugin contains assertions used by pytester. pytester cannot</span>
+<span class="s2"># contain them itself, since it is imported by the `pytest` module,</span>
+<span class="s2"># hence cannot be subject to assertion rewriting, which requires a</span>
+<span class="s2"># module to not be already imported.</span>
+<span class="s3">from </span><span class="s1">typing </span><span class="s3">import </span><span class="s1">Dict</span>
+<span class="s3">from </span><span class="s1">typing </span><span class="s3">import </span><span class="s1">Optional</span>
+<span class="s3">from </span><span class="s1">typing </span><span class="s3">import </span><span class="s1">Sequence</span>
+<span class="s3">from </span><span class="s1">typing </span><span class="s3">import </span><span class="s1">Tuple</span>
+<span class="s3">from </span><span class="s1">typing </span><span class="s3">import </span><span class="s1">Union</span>
+
+<span class="s3">from </span><span class="s1">_pytest</span><span class="s4">.</span><span class="s1">reports </span><span class="s3">import </span><span class="s1">CollectReport</span>
+<span class="s3">from </span><span class="s1">_pytest</span><span class="s4">.</span><span class="s1">reports </span><span class="s3">import </span><span class="s1">TestReport</span>
+
+
+<span class="s3">def </span><span class="s1">assertoutcome</span><span class="s4">(</span>
+    <span class="s1">outcomes</span><span class="s4">: </span><span class="s1">Tuple</span><span class="s4">[</span>
+        <span class="s1">Sequence</span><span class="s4">[</span><span class="s1">TestReport</span><span class="s4">],</span>
+        <span class="s1">Sequence</span><span class="s4">[</span><span class="s1">Union</span><span class="s4">[</span><span class="s1">CollectReport</span><span class="s4">, </span><span class="s1">TestReport</span><span class="s4">]],</span>
+        <span class="s1">Sequence</span><span class="s4">[</span><span class="s1">Union</span><span class="s4">[</span><span class="s1">CollectReport</span><span class="s4">, </span><span class="s1">TestReport</span><span class="s4">]],</span>
+    <span class="s4">],</span>
+    <span class="s1">passed</span><span class="s4">: </span><span class="s1">int </span><span class="s4">= </span><span class="s5">0</span><span class="s4">,</span>
+    <span class="s1">skipped</span><span class="s4">: </span><span class="s1">int </span><span class="s4">= </span><span class="s5">0</span><span class="s4">,</span>
+    <span class="s1">failed</span><span class="s4">: </span><span class="s1">int </span><span class="s4">= </span><span class="s5">0</span><span class="s4">,</span>
+<span class="s4">) </span><span class="s1">-&gt; </span><span class="s3">None</span><span class="s4">:</span>
+    <span class="s1">__tracebackhide__ </span><span class="s4">= </span><span class="s3">True</span>
+
+    <span class="s1">realpassed</span><span class="s4">, </span><span class="s1">realskipped</span><span class="s4">, </span><span class="s1">realfailed </span><span class="s4">= </span><span class="s1">outcomes</span>
+    <span class="s1">obtained </span><span class="s4">= {</span>
+        <span class="s6">&quot;passed&quot;</span><span class="s4">: </span><span class="s1">len</span><span class="s4">(</span><span class="s1">realpassed</span><span class="s4">),</span>
+        <span class="s6">&quot;skipped&quot;</span><span class="s4">: </span><span class="s1">len</span><span class="s4">(</span><span class="s1">realskipped</span><span class="s4">),</span>
+        <span class="s6">&quot;failed&quot;</span><span class="s4">: </span><span class="s1">len</span><span class="s4">(</span><span class="s1">realfailed</span><span class="s4">),</span>
+    <span class="s4">}</span>
+    <span class="s1">expected </span><span class="s4">= {</span><span class="s6">&quot;passed&quot;</span><span class="s4">: </span><span class="s1">passed</span><span class="s4">, </span><span class="s6">&quot;skipped&quot;</span><span class="s4">: </span><span class="s1">skipped</span><span class="s4">, </span><span class="s6">&quot;failed&quot;</span><span class="s4">: </span><span class="s1">failed</span><span class="s4">}</span>
+    <span class="s3">assert </span><span class="s1">obtained </span><span class="s4">== </span><span class="s1">expected</span><span class="s4">, </span><span class="s1">outcomes</span>
+
+
+<span class="s3">def </span><span class="s1">assert_outcomes</span><span class="s4">(</span>
+    <span class="s1">outcomes</span><span class="s4">: </span><span class="s1">Dict</span><span class="s4">[</span><span class="s1">str</span><span class="s4">, </span><span class="s1">int</span><span class="s4">],</span>
+    <span class="s1">passed</span><span class="s4">: </span><span class="s1">int </span><span class="s4">= </span><span class="s5">0</span><span class="s4">,</span>
+    <span class="s1">skipped</span><span class="s4">: </span><span class="s1">int </span><span class="s4">= </span><span class="s5">0</span><span class="s4">,</span>
+    <span class="s1">failed</span><span class="s4">: </span><span class="s1">int </span><span class="s4">= </span><span class="s5">0</span><span class="s4">,</span>
+    <span class="s1">errors</span><span class="s4">: </span><span class="s1">int </span><span class="s4">= </span><span class="s5">0</span><span class="s4">,</span>
+    <span class="s1">xpassed</span><span class="s4">: </span><span class="s1">int </span><span class="s4">= </span><span class="s5">0</span><span class="s4">,</span>
+    <span class="s1">xfailed</span><span class="s4">: </span><span class="s1">int </span><span class="s4">= </span><span class="s5">0</span><span class="s4">,</span>
+    <span class="s1">warnings</span><span class="s4">: </span><span class="s1">Optional</span><span class="s4">[</span><span class="s1">int</span><span class="s4">] = </span><span class="s3">None</span><span class="s4">,</span>
+    <span class="s1">deselected</span><span class="s4">: </span><span class="s1">Optional</span><span class="s4">[</span><span class="s1">int</span><span class="s4">] = </span><span class="s3">None</span><span class="s4">,</span>
+<span class="s4">) </span><span class="s1">-&gt; </span><span class="s3">None</span><span class="s4">:</span>
+    <span class="s0">&quot;&quot;&quot;Assert that the specified outcomes appear with the respective 
+    numbers (0 means it didn't occur) in the text output from a test run.&quot;&quot;&quot;</span>
+    <span class="s1">__tracebackhide__ </span><span class="s4">= </span><span class="s3">True</span>
+
+    <span class="s1">obtained </span><span class="s4">= {</span>
+        <span class="s6">&quot;passed&quot;</span><span class="s4">: </span><span class="s1">outcomes</span><span class="s4">.</span><span class="s1">get</span><span class="s4">(</span><span class="s6">&quot;passed&quot;</span><span class="s4">, </span><span class="s5">0</span><span class="s4">),</span>
+        <span class="s6">&quot;skipped&quot;</span><span class="s4">: </span><span class="s1">outcomes</span><span class="s4">.</span><span class="s1">get</span><span class="s4">(</span><span class="s6">&quot;skipped&quot;</span><span class="s4">, </span><span class="s5">0</span><span class="s4">),</span>
+        <span class="s6">&quot;failed&quot;</span><span class="s4">: </span><span class="s1">outcomes</span><span class="s4">.</span><span class="s1">get</span><span class="s4">(</span><span class="s6">&quot;failed&quot;</span><span class="s4">, </span><span class="s5">0</span><span class="s4">),</span>
+        <span class="s6">&quot;errors&quot;</span><span class="s4">: </span><span class="s1">outcomes</span><span class="s4">.</span><span class="s1">get</span><span class="s4">(</span><span class="s6">&quot;errors&quot;</span><span class="s4">, </span><span class="s5">0</span><span class="s4">),</span>
+        <span class="s6">&quot;xpassed&quot;</span><span class="s4">: </span><span class="s1">outcomes</span><span class="s4">.</span><span class="s1">get</span><span class="s4">(</span><span class="s6">&quot;xpassed&quot;</span><span class="s4">, </span><span class="s5">0</span><span class="s4">),</span>
+        <span class="s6">&quot;xfailed&quot;</span><span class="s4">: </span><span class="s1">outcomes</span><span class="s4">.</span><span class="s1">get</span><span class="s4">(</span><span class="s6">&quot;xfailed&quot;</span><span class="s4">, </span><span class="s5">0</span><span class="s4">),</span>
+    <span class="s4">}</span>
+    <span class="s1">expected </span><span class="s4">= {</span>
+        <span class="s6">&quot;passed&quot;</span><span class="s4">: </span><span class="s1">passed</span><span class="s4">,</span>
+        <span class="s6">&quot;skipped&quot;</span><span class="s4">: </span><span class="s1">skipped</span><span class="s4">,</span>
+        <span class="s6">&quot;failed&quot;</span><span class="s4">: </span><span class="s1">failed</span><span class="s4">,</span>
+        <span class="s6">&quot;errors&quot;</span><span class="s4">: </span><span class="s1">errors</span><span class="s4">,</span>
+        <span class="s6">&quot;xpassed&quot;</span><span class="s4">: </span><span class="s1">xpassed</span><span class="s4">,</span>
+        <span class="s6">&quot;xfailed&quot;</span><span class="s4">: </span><span class="s1">xfailed</span><span class="s4">,</span>
+    <span class="s4">}</span>
+    <span class="s3">if </span><span class="s1">warnings </span><span class="s3">is not None</span><span class="s4">:</span>
+        <span class="s1">obtained</span><span class="s4">[</span><span class="s6">&quot;warnings&quot;</span><span class="s4">] = </span><span class="s1">outcomes</span><span class="s4">.</span><span class="s1">get</span><span class="s4">(</span><span class="s6">&quot;warnings&quot;</span><span class="s4">, </span><span class="s5">0</span><span class="s4">)</span>
+        <span class="s1">expected</span><span class="s4">[</span><span class="s6">&quot;warnings&quot;</span><span class="s4">] = </span><span class="s1">warnings</span>
+    <span class="s3">if </span><span class="s1">deselected </span><span class="s3">is not None</span><span class="s4">:</span>
+        <span class="s1">obtained</span><span class="s4">[</span><span class="s6">&quot;deselected&quot;</span><span class="s4">] = </span><span class="s1">outcomes</span><span class="s4">.</span><span class="s1">get</span><span class="s4">(</span><span class="s6">&quot;deselected&quot;</span><span class="s4">, </span><span class="s5">0</span><span class="s4">)</span>
+        <span class="s1">expected</span><span class="s4">[</span><span class="s6">&quot;deselected&quot;</span><span class="s4">] = </span><span class="s1">deselected</span>
+    <span class="s3">assert </span><span class="s1">obtained </span><span class="s4">== </span><span class="s1">expected</span>
+</pre>
+</body>
+</html>

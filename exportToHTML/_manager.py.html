@@ -1,0 +1,528 @@
+<html>
+<head>
+<title>_manager.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #5f826b; font-style: italic;}
+.s4 { color: #7a7e85;}
+.s5 { color: #6aab73;}
+.s6 { color: #2aacb8;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+_manager.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">annotations</span>
+
+<span class="s0">import </span><span class="s1">importlib</span><span class="s2">.</span><span class="s1">metadata</span>
+<span class="s0">import </span><span class="s1">inspect</span>
+<span class="s0">import </span><span class="s1">types</span>
+<span class="s0">import </span><span class="s1">warnings</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Any</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Callable</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">cast</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Final</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Iterable</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Mapping</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Sequence</span>
+
+<span class="s0">from </span><span class="s2">. </span><span class="s0">import </span><span class="s1">_tracing</span>
+<span class="s0">from </span><span class="s2">.</span><span class="s1">_callers </span><span class="s0">import </span><span class="s1">_multicall</span>
+<span class="s0">from </span><span class="s2">.</span><span class="s1">_hooks </span><span class="s0">import </span><span class="s1">_HookImplFunction</span>
+<span class="s0">from </span><span class="s2">.</span><span class="s1">_hooks </span><span class="s0">import </span><span class="s1">_Namespace</span>
+<span class="s0">from </span><span class="s2">.</span><span class="s1">_hooks </span><span class="s0">import </span><span class="s1">_Plugin</span>
+<span class="s0">from </span><span class="s2">.</span><span class="s1">_hooks </span><span class="s0">import </span><span class="s1">_SubsetHookCaller</span>
+<span class="s0">from </span><span class="s2">.</span><span class="s1">_hooks </span><span class="s0">import </span><span class="s1">HookCaller</span>
+<span class="s0">from </span><span class="s2">.</span><span class="s1">_hooks </span><span class="s0">import </span><span class="s1">HookImpl</span>
+<span class="s0">from </span><span class="s2">.</span><span class="s1">_hooks </span><span class="s0">import </span><span class="s1">HookimplOpts</span>
+<span class="s0">from </span><span class="s2">.</span><span class="s1">_hooks </span><span class="s0">import </span><span class="s1">HookRelay</span>
+<span class="s0">from </span><span class="s2">.</span><span class="s1">_hooks </span><span class="s0">import </span><span class="s1">HookspecOpts</span>
+<span class="s0">from </span><span class="s2">.</span><span class="s1">_hooks </span><span class="s0">import </span><span class="s1">normalize_hookimpl_opts</span>
+<span class="s0">from </span><span class="s2">.</span><span class="s1">_result </span><span class="s0">import </span><span class="s1">Result</span>
+
+
+<span class="s1">_BeforeTrace </span><span class="s2">= </span><span class="s1">Callable</span><span class="s2">[[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">Sequence</span><span class="s2">[</span><span class="s1">HookImpl</span><span class="s2">], </span><span class="s1">Mapping</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">Any</span><span class="s2">]], </span><span class="s0">None</span><span class="s2">]</span>
+<span class="s1">_AfterTrace </span><span class="s2">= </span><span class="s1">Callable</span><span class="s2">[[</span><span class="s1">Result</span><span class="s2">[</span><span class="s1">Any</span><span class="s2">], </span><span class="s1">str</span><span class="s2">, </span><span class="s1">Sequence</span><span class="s2">[</span><span class="s1">HookImpl</span><span class="s2">], </span><span class="s1">Mapping</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">Any</span><span class="s2">]], </span><span class="s0">None</span><span class="s2">]</span>
+
+
+<span class="s0">def </span><span class="s1">_warn_for_function</span><span class="s2">(</span><span class="s1">warning</span><span class="s2">: </span><span class="s1">Warning</span><span class="s2">, </span><span class="s1">function</span><span class="s2">: </span><span class="s1">Callable</span><span class="s2">[..., </span><span class="s1">object</span><span class="s2">]) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+    <span class="s1">func </span><span class="s2">= </span><span class="s1">cast</span><span class="s2">(</span><span class="s1">types</span><span class="s2">.</span><span class="s1">FunctionType</span><span class="s2">, </span><span class="s1">function</span><span class="s2">)</span>
+    <span class="s1">warnings</span><span class="s2">.</span><span class="s1">warn_explicit</span><span class="s2">(</span>
+        <span class="s1">warning</span><span class="s2">,</span>
+        <span class="s1">type</span><span class="s2">(</span><span class="s1">warning</span><span class="s2">),</span>
+        <span class="s1">lineno</span><span class="s2">=</span><span class="s1">func</span><span class="s2">.</span><span class="s1">__code__</span><span class="s2">.</span><span class="s1">co_firstlineno</span><span class="s2">,</span>
+        <span class="s1">filename</span><span class="s2">=</span><span class="s1">func</span><span class="s2">.</span><span class="s1">__code__</span><span class="s2">.</span><span class="s1">co_filename</span><span class="s2">,</span>
+    <span class="s2">)</span>
+
+
+<span class="s0">class </span><span class="s1">PluginValidationError</span><span class="s2">(</span><span class="s1">Exception</span><span class="s2">):</span>
+    <span class="s3">&quot;&quot;&quot;Plugin failed validation. 
+ 
+    :param plugin: The plugin which failed validation. 
+    :param message: Error message. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">plugin</span><span class="s2">: </span><span class="s1">_Plugin</span><span class="s2">, </span><span class="s1">message</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s1">super</span><span class="s2">().</span><span class="s1">__init__</span><span class="s2">(</span><span class="s1">message</span><span class="s2">)</span>
+        <span class="s4">#: The plugin which failed validation.</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">plugin </span><span class="s2">= </span><span class="s1">plugin</span>
+
+
+<span class="s0">class </span><span class="s1">DistFacade</span><span class="s2">:</span>
+    <span class="s3">&quot;&quot;&quot;Emulate a pkg_resources Distribution&quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">dist</span><span class="s2">: </span><span class="s1">importlib</span><span class="s2">.</span><span class="s1">metadata</span><span class="s2">.</span><span class="s1">Distribution</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">_dist </span><span class="s2">= </span><span class="s1">dist</span>
+
+    <span class="s2">@</span><span class="s1">property</span>
+    <span class="s0">def </span><span class="s1">project_name</span><span class="s2">(</span><span class="s1">self</span><span class="s2">) </span><span class="s1">-&gt; str</span><span class="s2">:</span>
+        <span class="s1">name</span><span class="s2">: </span><span class="s1">str </span><span class="s2">= </span><span class="s1">self</span><span class="s2">.</span><span class="s1">metadata</span><span class="s2">[</span><span class="s5">&quot;name&quot;</span><span class="s2">]</span>
+        <span class="s0">return </span><span class="s1">name</span>
+
+    <span class="s0">def </span><span class="s1">__getattr__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">attr</span><span class="s2">: </span><span class="s1">str</span><span class="s2">, </span><span class="s1">default</span><span class="s2">=</span><span class="s0">None</span><span class="s2">):</span>
+        <span class="s0">return </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">_dist</span><span class="s2">, </span><span class="s1">attr</span><span class="s2">, </span><span class="s1">default</span><span class="s2">)</span>
+
+    <span class="s0">def </span><span class="s1">__dir__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">) </span><span class="s1">-&gt; list</span><span class="s2">[</span><span class="s1">str</span><span class="s2">]:</span>
+        <span class="s0">return </span><span class="s1">sorted</span><span class="s2">(</span><span class="s1">dir</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">_dist</span><span class="s2">) + [</span><span class="s5">&quot;_dist&quot;</span><span class="s2">, </span><span class="s5">&quot;project_name&quot;</span><span class="s2">])</span>
+
+
+<span class="s0">class </span><span class="s1">PluginManager</span><span class="s2">:</span>
+    <span class="s3">&quot;&quot;&quot;Core class which manages registration of plugin objects and 1:N hook 
+    calling. 
+ 
+    You can register new hooks by calling :meth:`add_hookspecs(module_or_class) 
+    &lt;PluginManager.add_hookspecs&gt;`. 
+ 
+    You can register plugin objects (which contain hook implementations) by 
+    calling :meth:`register(plugin) &lt;PluginManager.register&gt;`. 
+ 
+    For debugging purposes you can call :meth:`PluginManager.enable_tracing` 
+    which will subsequently send debug information to the trace helper. 
+ 
+    :param project_name: 
+        The short project name. Prefer snake case. Make sure it's unique! 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">project_name</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s4">#: The project name.</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">project_name</span><span class="s2">: </span><span class="s1">Final </span><span class="s2">= </span><span class="s1">project_name</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">_name2plugin</span><span class="s2">: </span><span class="s1">Final</span><span class="s2">[</span><span class="s1">dict</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">_Plugin</span><span class="s2">]] = {}</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">_plugin_distinfo</span><span class="s2">: </span><span class="s1">Final</span><span class="s2">[</span><span class="s1">list</span><span class="s2">[</span><span class="s1">tuple</span><span class="s2">[</span><span class="s1">_Plugin</span><span class="s2">, </span><span class="s1">DistFacade</span><span class="s2">]]] = []</span>
+        <span class="s4">#: The &quot;hook relay&quot;, used to call a hook on all registered plugins.</span>
+        <span class="s4">#: See :ref:`calling`.</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">hook</span><span class="s2">: </span><span class="s1">Final </span><span class="s2">= </span><span class="s1">HookRelay</span><span class="s2">()</span>
+        <span class="s4">#: The tracing entry point. See :ref:`tracing`.</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">trace</span><span class="s2">: </span><span class="s1">Final</span><span class="s2">[</span><span class="s1">_tracing</span><span class="s2">.</span><span class="s1">TagTracerSub</span><span class="s2">] = </span><span class="s1">_tracing</span><span class="s2">.</span><span class="s1">TagTracer</span><span class="s2">().</span><span class="s1">get</span><span class="s2">(</span>
+            <span class="s5">&quot;pluginmanage&quot;</span>
+        <span class="s2">)</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">_inner_hookexec </span><span class="s2">= </span><span class="s1">_multicall</span>
+
+    <span class="s0">def </span><span class="s1">_hookexec</span><span class="s2">(</span>
+        <span class="s1">self</span><span class="s2">,</span>
+        <span class="s1">hook_name</span><span class="s2">: </span><span class="s1">str</span><span class="s2">,</span>
+        <span class="s1">methods</span><span class="s2">: </span><span class="s1">Sequence</span><span class="s2">[</span><span class="s1">HookImpl</span><span class="s2">],</span>
+        <span class="s1">kwargs</span><span class="s2">: </span><span class="s1">Mapping</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">object</span><span class="s2">],</span>
+        <span class="s1">firstresult</span><span class="s2">: </span><span class="s1">bool</span><span class="s2">,</span>
+    <span class="s2">) </span><span class="s1">-&gt; object </span><span class="s2">| </span><span class="s1">list</span><span class="s2">[</span><span class="s1">object</span><span class="s2">]:</span>
+        <span class="s4"># called from all hookcaller instances.</span>
+        <span class="s4"># enable_tracing will set its own wrapping function at self._inner_hookexec</span>
+        <span class="s0">return </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_inner_hookexec</span><span class="s2">(</span><span class="s1">hook_name</span><span class="s2">, </span><span class="s1">methods</span><span class="s2">, </span><span class="s1">kwargs</span><span class="s2">, </span><span class="s1">firstresult</span><span class="s2">)</span>
+
+    <span class="s0">def </span><span class="s1">register</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">plugin</span><span class="s2">: </span><span class="s1">_Plugin</span><span class="s2">, </span><span class="s1">name</span><span class="s2">: </span><span class="s1">str </span><span class="s2">| </span><span class="s0">None </span><span class="s2">= </span><span class="s0">None</span><span class="s2">) </span><span class="s1">-&gt; str </span><span class="s2">| </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Register a plugin and return its name. 
+ 
+        :param name: 
+            The name under which to register the plugin. If not specified, a 
+            name is generated using :func:`get_canonical_name`. 
+ 
+        :returns: 
+            The plugin name. If the name is blocked from registering, returns 
+            ``None``. 
+ 
+        If the plugin is already registered, raises a :exc:`ValueError`. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">plugin_name </span><span class="s2">= </span><span class="s1">name </span><span class="s0">or </span><span class="s1">self</span><span class="s2">.</span><span class="s1">get_canonical_name</span><span class="s2">(</span><span class="s1">plugin</span><span class="s2">)</span>
+
+        <span class="s0">if </span><span class="s1">plugin_name </span><span class="s0">in </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_name2plugin</span><span class="s2">:</span>
+            <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_name2plugin</span><span class="s2">.</span><span class="s1">get</span><span class="s2">(</span><span class="s1">plugin_name</span><span class="s2">, -</span><span class="s6">1</span><span class="s2">) </span><span class="s0">is None</span><span class="s2">:</span>
+                <span class="s0">return None  </span><span class="s4"># blocked plugin, return None to indicate no registration</span>
+            <span class="s0">raise </span><span class="s1">ValueError</span><span class="s2">(</span>
+                <span class="s5">&quot;Plugin name already registered: %s=%s</span><span class="s0">\n</span><span class="s5">%s&quot;</span>
+                <span class="s2">% (</span><span class="s1">plugin_name</span><span class="s2">, </span><span class="s1">plugin</span><span class="s2">, </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_name2plugin</span><span class="s2">)</span>
+            <span class="s2">)</span>
+
+        <span class="s0">if </span><span class="s1">plugin </span><span class="s0">in </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_name2plugin</span><span class="s2">.</span><span class="s1">values</span><span class="s2">():</span>
+            <span class="s0">raise </span><span class="s1">ValueError</span><span class="s2">(</span>
+                <span class="s5">&quot;Plugin already registered under a different name: %s=%s</span><span class="s0">\n</span><span class="s5">%s&quot;</span>
+                <span class="s2">% (</span><span class="s1">plugin_name</span><span class="s2">, </span><span class="s1">plugin</span><span class="s2">, </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_name2plugin</span><span class="s2">)</span>
+            <span class="s2">)</span>
+
+        <span class="s4"># XXX if an error happens we should make sure no state has been</span>
+        <span class="s4"># changed at point of return</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">_name2plugin</span><span class="s2">[</span><span class="s1">plugin_name</span><span class="s2">] = </span><span class="s1">plugin</span>
+
+        <span class="s4"># register matching hook implementations of the plugin</span>
+        <span class="s0">for </span><span class="s1">name </span><span class="s0">in </span><span class="s1">dir</span><span class="s2">(</span><span class="s1">plugin</span><span class="s2">):</span>
+            <span class="s1">hookimpl_opts </span><span class="s2">= </span><span class="s1">self</span><span class="s2">.</span><span class="s1">parse_hookimpl_opts</span><span class="s2">(</span><span class="s1">plugin</span><span class="s2">, </span><span class="s1">name</span><span class="s2">)</span>
+            <span class="s0">if </span><span class="s1">hookimpl_opts </span><span class="s0">is not None</span><span class="s2">:</span>
+                <span class="s1">normalize_hookimpl_opts</span><span class="s2">(</span><span class="s1">hookimpl_opts</span><span class="s2">)</span>
+                <span class="s1">method</span><span class="s2">: </span><span class="s1">_HookImplFunction</span><span class="s2">[</span><span class="s1">object</span><span class="s2">] = </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">plugin</span><span class="s2">, </span><span class="s1">name</span><span class="s2">)</span>
+                <span class="s1">hookimpl </span><span class="s2">= </span><span class="s1">HookImpl</span><span class="s2">(</span><span class="s1">plugin</span><span class="s2">, </span><span class="s1">plugin_name</span><span class="s2">, </span><span class="s1">method</span><span class="s2">, </span><span class="s1">hookimpl_opts</span><span class="s2">)</span>
+                <span class="s1">name </span><span class="s2">= </span><span class="s1">hookimpl_opts</span><span class="s2">.</span><span class="s1">get</span><span class="s2">(</span><span class="s5">&quot;specname&quot;</span><span class="s2">) </span><span class="s0">or </span><span class="s1">name</span>
+                <span class="s1">hook</span><span class="s2">: </span><span class="s1">HookCaller </span><span class="s2">| </span><span class="s0">None </span><span class="s2">= </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">hook</span><span class="s2">, </span><span class="s1">name</span><span class="s2">, </span><span class="s0">None</span><span class="s2">)</span>
+                <span class="s0">if </span><span class="s1">hook </span><span class="s0">is None</span><span class="s2">:</span>
+                    <span class="s1">hook </span><span class="s2">= </span><span class="s1">HookCaller</span><span class="s2">(</span><span class="s1">name</span><span class="s2">, </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_hookexec</span><span class="s2">)</span>
+                    <span class="s1">setattr</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">hook</span><span class="s2">, </span><span class="s1">name</span><span class="s2">, </span><span class="s1">hook</span><span class="s2">)</span>
+                <span class="s0">elif </span><span class="s1">hook</span><span class="s2">.</span><span class="s1">has_spec</span><span class="s2">():</span>
+                    <span class="s1">self</span><span class="s2">.</span><span class="s1">_verify_hook</span><span class="s2">(</span><span class="s1">hook</span><span class="s2">, </span><span class="s1">hookimpl</span><span class="s2">)</span>
+                    <span class="s1">hook</span><span class="s2">.</span><span class="s1">_maybe_apply_history</span><span class="s2">(</span><span class="s1">hookimpl</span><span class="s2">)</span>
+                <span class="s1">hook</span><span class="s2">.</span><span class="s1">_add_hookimpl</span><span class="s2">(</span><span class="s1">hookimpl</span><span class="s2">)</span>
+        <span class="s0">return </span><span class="s1">plugin_name</span>
+
+    <span class="s0">def </span><span class="s1">parse_hookimpl_opts</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">plugin</span><span class="s2">: </span><span class="s1">_Plugin</span><span class="s2">, </span><span class="s1">name</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; HookimplOpts </span><span class="s2">| </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Try to obtain a hook implementation from an item with the given name 
+        in the given plugin which is being searched for hook impls. 
+ 
+        :returns: 
+            The parsed hookimpl options, or None to skip the given item. 
+ 
+        This method can be overridden by ``PluginManager`` subclasses to 
+        customize how hook implementation are picked up. By default, returns the 
+        options for items decorated with :class:`HookimplMarker`. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">method</span><span class="s2">: </span><span class="s1">object </span><span class="s2">= </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">plugin</span><span class="s2">, </span><span class="s1">name</span><span class="s2">)</span>
+        <span class="s0">if not </span><span class="s1">inspect</span><span class="s2">.</span><span class="s1">isroutine</span><span class="s2">(</span><span class="s1">method</span><span class="s2">):</span>
+            <span class="s0">return None</span>
+        <span class="s0">try</span><span class="s2">:</span>
+            <span class="s1">res</span><span class="s2">: </span><span class="s1">HookimplOpts </span><span class="s2">| </span><span class="s0">None </span><span class="s2">= </span><span class="s1">getattr</span><span class="s2">(</span>
+                <span class="s1">method</span><span class="s2">, </span><span class="s1">self</span><span class="s2">.</span><span class="s1">project_name </span><span class="s2">+ </span><span class="s5">&quot;_impl&quot;</span><span class="s2">, </span><span class="s0">None</span>
+            <span class="s2">)</span>
+        <span class="s0">except </span><span class="s1">Exception</span><span class="s2">:</span>
+            <span class="s1">res </span><span class="s2">= {}  </span><span class="s4"># type: ignore[assignment]</span>
+        <span class="s0">if </span><span class="s1">res </span><span class="s0">is not None and not </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">res</span><span class="s2">, </span><span class="s1">dict</span><span class="s2">):</span>
+            <span class="s4"># false positive</span>
+            <span class="s1">res </span><span class="s2">= </span><span class="s0">None  </span><span class="s4"># type:ignore[unreachable]</span>
+        <span class="s0">return </span><span class="s1">res</span>
+
+    <span class="s0">def </span><span class="s1">unregister</span><span class="s2">(</span>
+        <span class="s1">self</span><span class="s2">, </span><span class="s1">plugin</span><span class="s2">: </span><span class="s1">_Plugin </span><span class="s2">| </span><span class="s0">None </span><span class="s2">= </span><span class="s0">None</span><span class="s2">, </span><span class="s1">name</span><span class="s2">: </span><span class="s1">str </span><span class="s2">| </span><span class="s0">None </span><span class="s2">= </span><span class="s0">None</span>
+    <span class="s2">) </span><span class="s1">-&gt; Any </span><span class="s2">| </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Unregister a plugin and all of its hook implementations. 
+ 
+        The plugin can be specified either by the plugin object or the plugin 
+        name. If both are specified, they must agree. 
+ 
+        Returns the unregistered plugin, or ``None`` if not found. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">name </span><span class="s0">is None</span><span class="s2">:</span>
+            <span class="s0">assert </span><span class="s1">plugin </span><span class="s0">is not None</span><span class="s2">, </span><span class="s5">&quot;one of name or plugin needs to be specified&quot;</span>
+            <span class="s1">name </span><span class="s2">= </span><span class="s1">self</span><span class="s2">.</span><span class="s1">get_name</span><span class="s2">(</span><span class="s1">plugin</span><span class="s2">)</span>
+            <span class="s0">assert </span><span class="s1">name </span><span class="s0">is not None</span><span class="s2">, </span><span class="s5">&quot;plugin is not registered&quot;</span>
+
+        <span class="s0">if </span><span class="s1">plugin </span><span class="s0">is None</span><span class="s2">:</span>
+            <span class="s1">plugin </span><span class="s2">= </span><span class="s1">self</span><span class="s2">.</span><span class="s1">get_plugin</span><span class="s2">(</span><span class="s1">name</span><span class="s2">)</span>
+            <span class="s0">if </span><span class="s1">plugin </span><span class="s0">is None</span><span class="s2">:</span>
+                <span class="s0">return None</span>
+
+        <span class="s1">hookcallers </span><span class="s2">= </span><span class="s1">self</span><span class="s2">.</span><span class="s1">get_hookcallers</span><span class="s2">(</span><span class="s1">plugin</span><span class="s2">)</span>
+        <span class="s0">if </span><span class="s1">hookcallers</span><span class="s2">:</span>
+            <span class="s0">for </span><span class="s1">hookcaller </span><span class="s0">in </span><span class="s1">hookcallers</span><span class="s2">:</span>
+                <span class="s1">hookcaller</span><span class="s2">.</span><span class="s1">_remove_plugin</span><span class="s2">(</span><span class="s1">plugin</span><span class="s2">)</span>
+
+        <span class="s4"># if self._name2plugin[name] == None registration was blocked: ignore</span>
+        <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_name2plugin</span><span class="s2">.</span><span class="s1">get</span><span class="s2">(</span><span class="s1">name</span><span class="s2">):</span>
+            <span class="s0">assert </span><span class="s1">name </span><span class="s0">is not None</span>
+            <span class="s0">del </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_name2plugin</span><span class="s2">[</span><span class="s1">name</span><span class="s2">]</span>
+
+        <span class="s0">return </span><span class="s1">plugin</span>
+
+    <span class="s0">def </span><span class="s1">set_blocked</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">name</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Block registrations of the given name, unregister if already registered.&quot;&quot;&quot;</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">unregister</span><span class="s2">(</span><span class="s1">name</span><span class="s2">=</span><span class="s1">name</span><span class="s2">)</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">_name2plugin</span><span class="s2">[</span><span class="s1">name</span><span class="s2">] = </span><span class="s0">None</span>
+
+    <span class="s0">def </span><span class="s1">is_blocked</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">name</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; bool</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Return whether the given plugin name is blocked.&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">name </span><span class="s0">in </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_name2plugin </span><span class="s0">and </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_name2plugin</span><span class="s2">[</span><span class="s1">name</span><span class="s2">] </span><span class="s0">is None</span>
+
+    <span class="s0">def </span><span class="s1">add_hookspecs</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">module_or_class</span><span class="s2">: </span><span class="s1">_Namespace</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Add new hook specifications defined in the given ``module_or_class``. 
+ 
+        Functions are recognized as hook specifications if they have been 
+        decorated with a matching :class:`HookspecMarker`. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">names </span><span class="s2">= []</span>
+        <span class="s0">for </span><span class="s1">name </span><span class="s0">in </span><span class="s1">dir</span><span class="s2">(</span><span class="s1">module_or_class</span><span class="s2">):</span>
+            <span class="s1">spec_opts </span><span class="s2">= </span><span class="s1">self</span><span class="s2">.</span><span class="s1">parse_hookspec_opts</span><span class="s2">(</span><span class="s1">module_or_class</span><span class="s2">, </span><span class="s1">name</span><span class="s2">)</span>
+            <span class="s0">if </span><span class="s1">spec_opts </span><span class="s0">is not None</span><span class="s2">:</span>
+                <span class="s1">hc</span><span class="s2">: </span><span class="s1">HookCaller </span><span class="s2">| </span><span class="s0">None </span><span class="s2">= </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">hook</span><span class="s2">, </span><span class="s1">name</span><span class="s2">, </span><span class="s0">None</span><span class="s2">)</span>
+                <span class="s0">if </span><span class="s1">hc </span><span class="s0">is None</span><span class="s2">:</span>
+                    <span class="s1">hc </span><span class="s2">= </span><span class="s1">HookCaller</span><span class="s2">(</span><span class="s1">name</span><span class="s2">, </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_hookexec</span><span class="s2">, </span><span class="s1">module_or_class</span><span class="s2">, </span><span class="s1">spec_opts</span><span class="s2">)</span>
+                    <span class="s1">setattr</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">hook</span><span class="s2">, </span><span class="s1">name</span><span class="s2">, </span><span class="s1">hc</span><span class="s2">)</span>
+                <span class="s0">else</span><span class="s2">:</span>
+                    <span class="s4"># Plugins registered this hook without knowing the spec.</span>
+                    <span class="s1">hc</span><span class="s2">.</span><span class="s1">set_specification</span><span class="s2">(</span><span class="s1">module_or_class</span><span class="s2">, </span><span class="s1">spec_opts</span><span class="s2">)</span>
+                    <span class="s0">for </span><span class="s1">hookfunction </span><span class="s0">in </span><span class="s1">hc</span><span class="s2">.</span><span class="s1">get_hookimpls</span><span class="s2">():</span>
+                        <span class="s1">self</span><span class="s2">.</span><span class="s1">_verify_hook</span><span class="s2">(</span><span class="s1">hc</span><span class="s2">, </span><span class="s1">hookfunction</span><span class="s2">)</span>
+                <span class="s1">names</span><span class="s2">.</span><span class="s1">append</span><span class="s2">(</span><span class="s1">name</span><span class="s2">)</span>
+
+        <span class="s0">if not </span><span class="s1">names</span><span class="s2">:</span>
+            <span class="s0">raise </span><span class="s1">ValueError</span><span class="s2">(</span>
+                <span class="s5">f&quot;did not find any </span><span class="s0">{</span><span class="s1">self</span><span class="s2">.</span><span class="s1">project_name</span><span class="s0">!r} </span><span class="s5">hooks in </span><span class="s0">{</span><span class="s1">module_or_class</span><span class="s0">!r}</span><span class="s5">&quot;</span>
+            <span class="s2">)</span>
+
+    <span class="s0">def </span><span class="s1">parse_hookspec_opts</span><span class="s2">(</span>
+        <span class="s1">self</span><span class="s2">, </span><span class="s1">module_or_class</span><span class="s2">: </span><span class="s1">_Namespace</span><span class="s2">, </span><span class="s1">name</span><span class="s2">: </span><span class="s1">str</span>
+    <span class="s2">) </span><span class="s1">-&gt; HookspecOpts </span><span class="s2">| </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Try to obtain a hook specification from an item with the given name 
+        in the given module or class which is being searched for hook specs. 
+ 
+        :returns: 
+            The parsed hookspec options for defining a hook, or None to skip the 
+            given item. 
+ 
+        This method can be overridden by ``PluginManager`` subclasses to 
+        customize how hook specifications are picked up. By default, returns the 
+        options for items decorated with :class:`HookspecMarker`. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">method </span><span class="s2">= </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">module_or_class</span><span class="s2">, </span><span class="s1">name</span><span class="s2">)</span>
+        <span class="s1">opts</span><span class="s2">: </span><span class="s1">HookspecOpts </span><span class="s2">| </span><span class="s0">None </span><span class="s2">= </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">method</span><span class="s2">, </span><span class="s1">self</span><span class="s2">.</span><span class="s1">project_name </span><span class="s2">+ </span><span class="s5">&quot;_spec&quot;</span><span class="s2">, </span><span class="s0">None</span><span class="s2">)</span>
+        <span class="s0">return </span><span class="s1">opts</span>
+
+    <span class="s0">def </span><span class="s1">get_plugins</span><span class="s2">(</span><span class="s1">self</span><span class="s2">) </span><span class="s1">-&gt; set</span><span class="s2">[</span><span class="s1">Any</span><span class="s2">]:</span>
+        <span class="s3">&quot;&quot;&quot;Return a set of all registered plugin objects.&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">set</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">_name2plugin</span><span class="s2">.</span><span class="s1">values</span><span class="s2">())</span>
+
+    <span class="s0">def </span><span class="s1">is_registered</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">plugin</span><span class="s2">: </span><span class="s1">_Plugin</span><span class="s2">) </span><span class="s1">-&gt; bool</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Return whether the plugin is already registered.&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">any</span><span class="s2">(</span><span class="s1">plugin </span><span class="s2">== </span><span class="s1">val </span><span class="s0">for </span><span class="s1">val </span><span class="s0">in </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_name2plugin</span><span class="s2">.</span><span class="s1">values</span><span class="s2">())</span>
+
+    <span class="s0">def </span><span class="s1">get_canonical_name</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">plugin</span><span class="s2">: </span><span class="s1">_Plugin</span><span class="s2">) </span><span class="s1">-&gt; str</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Return a canonical name for a plugin object. 
+ 
+        Note that a plugin may be registered under a different name 
+        specified by the caller of :meth:`register(plugin, name) &lt;register&gt;`. 
+        To obtain the name of a registered plugin use :meth:`get_name(plugin) 
+        &lt;get_name&gt;` instead. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">name</span><span class="s2">: </span><span class="s1">str </span><span class="s2">| </span><span class="s0">None </span><span class="s2">= </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">plugin</span><span class="s2">, </span><span class="s5">&quot;__name__&quot;</span><span class="s2">, </span><span class="s0">None</span><span class="s2">)</span>
+        <span class="s0">return </span><span class="s1">name </span><span class="s0">or </span><span class="s1">str</span><span class="s2">(</span><span class="s1">id</span><span class="s2">(</span><span class="s1">plugin</span><span class="s2">))</span>
+
+    <span class="s0">def </span><span class="s1">get_plugin</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">name</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; Any </span><span class="s2">| </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Return the plugin registered under the given name, if any.&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_name2plugin</span><span class="s2">.</span><span class="s1">get</span><span class="s2">(</span><span class="s1">name</span><span class="s2">)</span>
+
+    <span class="s0">def </span><span class="s1">has_plugin</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">name</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; bool</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Return whether a plugin with the given name is registered.&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self</span><span class="s2">.</span><span class="s1">get_plugin</span><span class="s2">(</span><span class="s1">name</span><span class="s2">) </span><span class="s0">is not None</span>
+
+    <span class="s0">def </span><span class="s1">get_name</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">plugin</span><span class="s2">: </span><span class="s1">_Plugin</span><span class="s2">) </span><span class="s1">-&gt; str </span><span class="s2">| </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Return the name the plugin is registered under, or ``None`` if 
+        is isn't.&quot;&quot;&quot;</span>
+        <span class="s0">for </span><span class="s1">name</span><span class="s2">, </span><span class="s1">val </span><span class="s0">in </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_name2plugin</span><span class="s2">.</span><span class="s1">items</span><span class="s2">():</span>
+            <span class="s0">if </span><span class="s1">plugin </span><span class="s2">== </span><span class="s1">val</span><span class="s2">:</span>
+                <span class="s0">return </span><span class="s1">name</span>
+        <span class="s0">return None</span>
+
+    <span class="s0">def </span><span class="s1">_verify_hook</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">hook</span><span class="s2">: </span><span class="s1">HookCaller</span><span class="s2">, </span><span class="s1">hookimpl</span><span class="s2">: </span><span class="s1">HookImpl</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s0">if </span><span class="s1">hook</span><span class="s2">.</span><span class="s1">is_historic</span><span class="s2">() </span><span class="s0">and </span><span class="s2">(</span><span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">hookwrapper </span><span class="s0">or </span><span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">wrapper</span><span class="s2">):</span>
+            <span class="s0">raise </span><span class="s1">PluginValidationError</span><span class="s2">(</span>
+                <span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">plugin</span><span class="s2">,</span>
+                <span class="s5">&quot;Plugin %r</span><span class="s0">\n</span><span class="s5">hook %r</span><span class="s0">\n</span><span class="s5">historic incompatible with yield/wrapper/hookwrapper&quot;</span>
+                <span class="s2">% (</span><span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">plugin_name</span><span class="s2">, </span><span class="s1">hook</span><span class="s2">.</span><span class="s1">name</span><span class="s2">),</span>
+            <span class="s2">)</span>
+
+        <span class="s0">assert </span><span class="s1">hook</span><span class="s2">.</span><span class="s1">spec </span><span class="s0">is not None</span>
+        <span class="s0">if </span><span class="s1">hook</span><span class="s2">.</span><span class="s1">spec</span><span class="s2">.</span><span class="s1">warn_on_impl</span><span class="s2">:</span>
+            <span class="s1">_warn_for_function</span><span class="s2">(</span><span class="s1">hook</span><span class="s2">.</span><span class="s1">spec</span><span class="s2">.</span><span class="s1">warn_on_impl</span><span class="s2">, </span><span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">function</span><span class="s2">)</span>
+
+        <span class="s4"># positional arg checking</span>
+        <span class="s1">notinspec </span><span class="s2">= </span><span class="s1">set</span><span class="s2">(</span><span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">argnames</span><span class="s2">) - </span><span class="s1">set</span><span class="s2">(</span><span class="s1">hook</span><span class="s2">.</span><span class="s1">spec</span><span class="s2">.</span><span class="s1">argnames</span><span class="s2">)</span>
+        <span class="s0">if </span><span class="s1">notinspec</span><span class="s2">:</span>
+            <span class="s0">raise </span><span class="s1">PluginValidationError</span><span class="s2">(</span>
+                <span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">plugin</span><span class="s2">,</span>
+                <span class="s5">&quot;Plugin %r for hook %r</span><span class="s0">\n</span><span class="s5">hookimpl definition: %s</span><span class="s0">\n</span><span class="s5">&quot;</span>
+                <span class="s5">&quot;Argument(s) %s are declared in the hookimpl but &quot;</span>
+                <span class="s5">&quot;can not be found in the hookspec&quot;</span>
+                <span class="s2">% (</span>
+                    <span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">plugin_name</span><span class="s2">,</span>
+                    <span class="s1">hook</span><span class="s2">.</span><span class="s1">name</span><span class="s2">,</span>
+                    <span class="s1">_formatdef</span><span class="s2">(</span><span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">function</span><span class="s2">),</span>
+                    <span class="s1">notinspec</span><span class="s2">,</span>
+                <span class="s2">),</span>
+            <span class="s2">)</span>
+
+        <span class="s0">if </span><span class="s2">(</span>
+            <span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">wrapper </span><span class="s0">or </span><span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">hookwrapper</span>
+        <span class="s2">) </span><span class="s0">and not </span><span class="s1">inspect</span><span class="s2">.</span><span class="s1">isgeneratorfunction</span><span class="s2">(</span><span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">function</span><span class="s2">):</span>
+            <span class="s0">raise </span><span class="s1">PluginValidationError</span><span class="s2">(</span>
+                <span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">plugin</span><span class="s2">,</span>
+                <span class="s5">&quot;Plugin %r for hook %r</span><span class="s0">\n</span><span class="s5">hookimpl definition: %s</span><span class="s0">\n</span><span class="s5">&quot;</span>
+                <span class="s5">&quot;Declared as wrapper=True or hookwrapper=True &quot;</span>
+                <span class="s5">&quot;but function is not a generator function&quot;</span>
+                <span class="s2">% (</span><span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">plugin_name</span><span class="s2">, </span><span class="s1">hook</span><span class="s2">.</span><span class="s1">name</span><span class="s2">, </span><span class="s1">_formatdef</span><span class="s2">(</span><span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">function</span><span class="s2">)),</span>
+            <span class="s2">)</span>
+
+        <span class="s0">if </span><span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">wrapper </span><span class="s0">and </span><span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">hookwrapper</span><span class="s2">:</span>
+            <span class="s0">raise </span><span class="s1">PluginValidationError</span><span class="s2">(</span>
+                <span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">plugin</span><span class="s2">,</span>
+                <span class="s5">&quot;Plugin %r for hook %r</span><span class="s0">\n</span><span class="s5">hookimpl definition: %s</span><span class="s0">\n</span><span class="s5">&quot;</span>
+                <span class="s5">&quot;The wrapper=True and hookwrapper=True options are mutually exclusive&quot;</span>
+                <span class="s2">% (</span><span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">plugin_name</span><span class="s2">, </span><span class="s1">hook</span><span class="s2">.</span><span class="s1">name</span><span class="s2">, </span><span class="s1">_formatdef</span><span class="s2">(</span><span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">function</span><span class="s2">)),</span>
+            <span class="s2">)</span>
+
+    <span class="s0">def </span><span class="s1">check_pending</span><span class="s2">(</span><span class="s1">self</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Verify that all hooks which have not been verified against a 
+        hook specification are optional, otherwise raise 
+        :exc:`PluginValidationError`.&quot;&quot;&quot;</span>
+        <span class="s0">for </span><span class="s1">name </span><span class="s0">in </span><span class="s1">self</span><span class="s2">.</span><span class="s1">hook</span><span class="s2">.</span><span class="s1">__dict__</span><span class="s2">:</span>
+            <span class="s0">if </span><span class="s1">name</span><span class="s2">[</span><span class="s6">0</span><span class="s2">] != </span><span class="s5">&quot;_&quot;</span><span class="s2">:</span>
+                <span class="s1">hook</span><span class="s2">: </span><span class="s1">HookCaller </span><span class="s2">= </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">hook</span><span class="s2">, </span><span class="s1">name</span><span class="s2">)</span>
+                <span class="s0">if not </span><span class="s1">hook</span><span class="s2">.</span><span class="s1">has_spec</span><span class="s2">():</span>
+                    <span class="s0">for </span><span class="s1">hookimpl </span><span class="s0">in </span><span class="s1">hook</span><span class="s2">.</span><span class="s1">get_hookimpls</span><span class="s2">():</span>
+                        <span class="s0">if not </span><span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">optionalhook</span><span class="s2">:</span>
+                            <span class="s0">raise </span><span class="s1">PluginValidationError</span><span class="s2">(</span>
+                                <span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">plugin</span><span class="s2">,</span>
+                                <span class="s5">&quot;unknown hook %r in plugin %r&quot;</span>
+                                <span class="s2">% (</span><span class="s1">name</span><span class="s2">, </span><span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">plugin</span><span class="s2">),</span>
+                            <span class="s2">)</span>
+
+    <span class="s0">def </span><span class="s1">load_setuptools_entrypoints</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">group</span><span class="s2">: </span><span class="s1">str</span><span class="s2">, </span><span class="s1">name</span><span class="s2">: </span><span class="s1">str </span><span class="s2">| </span><span class="s0">None </span><span class="s2">= </span><span class="s0">None</span><span class="s2">) </span><span class="s1">-&gt; int</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Load modules from querying the specified setuptools ``group``. 
+ 
+        :param group: 
+            Entry point group to load plugins. 
+        :param name: 
+            If given, loads only plugins with the given ``name``. 
+ 
+        :return: 
+            The number of plugins loaded by this call. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">count </span><span class="s2">= </span><span class="s6">0</span>
+        <span class="s0">for </span><span class="s1">dist </span><span class="s0">in </span><span class="s1">list</span><span class="s2">(</span><span class="s1">importlib</span><span class="s2">.</span><span class="s1">metadata</span><span class="s2">.</span><span class="s1">distributions</span><span class="s2">()):</span>
+            <span class="s0">for </span><span class="s1">ep </span><span class="s0">in </span><span class="s1">dist</span><span class="s2">.</span><span class="s1">entry_points</span><span class="s2">:</span>
+                <span class="s0">if </span><span class="s2">(</span>
+                    <span class="s1">ep</span><span class="s2">.</span><span class="s1">group </span><span class="s2">!= </span><span class="s1">group</span>
+                    <span class="s0">or </span><span class="s2">(</span><span class="s1">name </span><span class="s0">is not None and </span><span class="s1">ep</span><span class="s2">.</span><span class="s1">name </span><span class="s2">!= </span><span class="s1">name</span><span class="s2">)</span>
+                    <span class="s4"># already registered</span>
+                    <span class="s0">or </span><span class="s1">self</span><span class="s2">.</span><span class="s1">get_plugin</span><span class="s2">(</span><span class="s1">ep</span><span class="s2">.</span><span class="s1">name</span><span class="s2">)</span>
+                    <span class="s0">or </span><span class="s1">self</span><span class="s2">.</span><span class="s1">is_blocked</span><span class="s2">(</span><span class="s1">ep</span><span class="s2">.</span><span class="s1">name</span><span class="s2">)</span>
+                <span class="s2">):</span>
+                    <span class="s0">continue</span>
+                <span class="s1">plugin </span><span class="s2">= </span><span class="s1">ep</span><span class="s2">.</span><span class="s1">load</span><span class="s2">()</span>
+                <span class="s1">self</span><span class="s2">.</span><span class="s1">register</span><span class="s2">(</span><span class="s1">plugin</span><span class="s2">, </span><span class="s1">name</span><span class="s2">=</span><span class="s1">ep</span><span class="s2">.</span><span class="s1">name</span><span class="s2">)</span>
+                <span class="s1">self</span><span class="s2">.</span><span class="s1">_plugin_distinfo</span><span class="s2">.</span><span class="s1">append</span><span class="s2">((</span><span class="s1">plugin</span><span class="s2">, </span><span class="s1">DistFacade</span><span class="s2">(</span><span class="s1">dist</span><span class="s2">)))</span>
+                <span class="s1">count </span><span class="s2">+= </span><span class="s6">1</span>
+        <span class="s0">return </span><span class="s1">count</span>
+
+    <span class="s0">def </span><span class="s1">list_plugin_distinfo</span><span class="s2">(</span><span class="s1">self</span><span class="s2">) </span><span class="s1">-&gt; list</span><span class="s2">[</span><span class="s1">tuple</span><span class="s2">[</span><span class="s1">_Plugin</span><span class="s2">, </span><span class="s1">DistFacade</span><span class="s2">]]:</span>
+        <span class="s3">&quot;&quot;&quot;Return a list of (plugin, distinfo) pairs for all 
+        setuptools-registered plugins.&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">list</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">_plugin_distinfo</span><span class="s2">)</span>
+
+    <span class="s0">def </span><span class="s1">list_name_plugin</span><span class="s2">(</span><span class="s1">self</span><span class="s2">) </span><span class="s1">-&gt; list</span><span class="s2">[</span><span class="s1">tuple</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">_Plugin</span><span class="s2">]]:</span>
+        <span class="s3">&quot;&quot;&quot;Return a list of (name, plugin) pairs for all registered plugins.&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">list</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">_name2plugin</span><span class="s2">.</span><span class="s1">items</span><span class="s2">())</span>
+
+    <span class="s0">def </span><span class="s1">get_hookcallers</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">plugin</span><span class="s2">: </span><span class="s1">_Plugin</span><span class="s2">) </span><span class="s1">-&gt; list</span><span class="s2">[</span><span class="s1">HookCaller</span><span class="s2">] | </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Get all hook callers for the specified plugin. 
+ 
+        :returns: 
+            The hook callers, or ``None`` if ``plugin`` is not registered in 
+            this plugin manager. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">self</span><span class="s2">.</span><span class="s1">get_name</span><span class="s2">(</span><span class="s1">plugin</span><span class="s2">) </span><span class="s0">is None</span><span class="s2">:</span>
+            <span class="s0">return None</span>
+        <span class="s1">hookcallers </span><span class="s2">= []</span>
+        <span class="s0">for </span><span class="s1">hookcaller </span><span class="s0">in </span><span class="s1">self</span><span class="s2">.</span><span class="s1">hook</span><span class="s2">.</span><span class="s1">__dict__</span><span class="s2">.</span><span class="s1">values</span><span class="s2">():</span>
+            <span class="s0">for </span><span class="s1">hookimpl </span><span class="s0">in </span><span class="s1">hookcaller</span><span class="s2">.</span><span class="s1">get_hookimpls</span><span class="s2">():</span>
+                <span class="s0">if </span><span class="s1">hookimpl</span><span class="s2">.</span><span class="s1">plugin </span><span class="s0">is </span><span class="s1">plugin</span><span class="s2">:</span>
+                    <span class="s1">hookcallers</span><span class="s2">.</span><span class="s1">append</span><span class="s2">(</span><span class="s1">hookcaller</span><span class="s2">)</span>
+        <span class="s0">return </span><span class="s1">hookcallers</span>
+
+    <span class="s0">def </span><span class="s1">add_hookcall_monitoring</span><span class="s2">(</span>
+        <span class="s1">self</span><span class="s2">, </span><span class="s1">before</span><span class="s2">: </span><span class="s1">_BeforeTrace</span><span class="s2">, </span><span class="s1">after</span><span class="s2">: </span><span class="s1">_AfterTrace</span>
+    <span class="s2">) </span><span class="s1">-&gt; Callable</span><span class="s2">[[], </span><span class="s0">None</span><span class="s2">]:</span>
+        <span class="s3">&quot;&quot;&quot;Add before/after tracing functions for all hooks. 
+ 
+        Returns an undo function which, when called, removes the added tracers. 
+ 
+        ``before(hook_name, hook_impls, kwargs)`` will be called ahead 
+        of all hook calls and receive a hookcaller instance, a list 
+        of HookImpl instances and the keyword arguments for the hook call. 
+ 
+        ``after(outcome, hook_name, hook_impls, kwargs)`` receives the 
+        same arguments as ``before`` but also a :class:`~pluggy.Result` object 
+        which represents the result of the overall hook call. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">oldcall </span><span class="s2">= </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_inner_hookexec</span>
+
+        <span class="s0">def </span><span class="s1">traced_hookexec</span><span class="s2">(</span>
+            <span class="s1">hook_name</span><span class="s2">: </span><span class="s1">str</span><span class="s2">,</span>
+            <span class="s1">hook_impls</span><span class="s2">: </span><span class="s1">Sequence</span><span class="s2">[</span><span class="s1">HookImpl</span><span class="s2">],</span>
+            <span class="s1">caller_kwargs</span><span class="s2">: </span><span class="s1">Mapping</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">object</span><span class="s2">],</span>
+            <span class="s1">firstresult</span><span class="s2">: </span><span class="s1">bool</span><span class="s2">,</span>
+        <span class="s2">) </span><span class="s1">-&gt; object </span><span class="s2">| </span><span class="s1">list</span><span class="s2">[</span><span class="s1">object</span><span class="s2">]:</span>
+            <span class="s1">before</span><span class="s2">(</span><span class="s1">hook_name</span><span class="s2">, </span><span class="s1">hook_impls</span><span class="s2">, </span><span class="s1">caller_kwargs</span><span class="s2">)</span>
+            <span class="s1">outcome </span><span class="s2">= </span><span class="s1">Result</span><span class="s2">.</span><span class="s1">from_call</span><span class="s2">(</span>
+                <span class="s0">lambda</span><span class="s2">: </span><span class="s1">oldcall</span><span class="s2">(</span><span class="s1">hook_name</span><span class="s2">, </span><span class="s1">hook_impls</span><span class="s2">, </span><span class="s1">caller_kwargs</span><span class="s2">, </span><span class="s1">firstresult</span><span class="s2">)</span>
+            <span class="s2">)</span>
+            <span class="s1">after</span><span class="s2">(</span><span class="s1">outcome</span><span class="s2">, </span><span class="s1">hook_name</span><span class="s2">, </span><span class="s1">hook_impls</span><span class="s2">, </span><span class="s1">caller_kwargs</span><span class="s2">)</span>
+            <span class="s0">return </span><span class="s1">outcome</span><span class="s2">.</span><span class="s1">get_result</span><span class="s2">()</span>
+
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">_inner_hookexec </span><span class="s2">= </span><span class="s1">traced_hookexec</span>
+
+        <span class="s0">def </span><span class="s1">undo</span><span class="s2">() </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">_inner_hookexec </span><span class="s2">= </span><span class="s1">oldcall</span>
+
+        <span class="s0">return </span><span class="s1">undo</span>
+
+    <span class="s0">def </span><span class="s1">enable_tracing</span><span class="s2">(</span><span class="s1">self</span><span class="s2">) </span><span class="s1">-&gt; Callable</span><span class="s2">[[], </span><span class="s0">None</span><span class="s2">]:</span>
+        <span class="s3">&quot;&quot;&quot;Enable tracing of hook calls. 
+ 
+        Returns an undo function which, when called, removes the added tracing. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">hooktrace </span><span class="s2">= </span><span class="s1">self</span><span class="s2">.</span><span class="s1">trace</span><span class="s2">.</span><span class="s1">root</span><span class="s2">.</span><span class="s1">get</span><span class="s2">(</span><span class="s5">&quot;hook&quot;</span><span class="s2">)</span>
+
+        <span class="s0">def </span><span class="s1">before</span><span class="s2">(</span>
+            <span class="s1">hook_name</span><span class="s2">: </span><span class="s1">str</span><span class="s2">, </span><span class="s1">methods</span><span class="s2">: </span><span class="s1">Sequence</span><span class="s2">[</span><span class="s1">HookImpl</span><span class="s2">], </span><span class="s1">kwargs</span><span class="s2">: </span><span class="s1">Mapping</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">object</span><span class="s2">]</span>
+        <span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+            <span class="s1">hooktrace</span><span class="s2">.</span><span class="s1">root</span><span class="s2">.</span><span class="s1">indent </span><span class="s2">+= </span><span class="s6">1</span>
+            <span class="s1">hooktrace</span><span class="s2">(</span><span class="s1">hook_name</span><span class="s2">, </span><span class="s1">kwargs</span><span class="s2">)</span>
+
+        <span class="s0">def </span><span class="s1">after</span><span class="s2">(</span>
+            <span class="s1">outcome</span><span class="s2">: </span><span class="s1">Result</span><span class="s2">[</span><span class="s1">object</span><span class="s2">],</span>
+            <span class="s1">hook_name</span><span class="s2">: </span><span class="s1">str</span><span class="s2">,</span>
+            <span class="s1">methods</span><span class="s2">: </span><span class="s1">Sequence</span><span class="s2">[</span><span class="s1">HookImpl</span><span class="s2">],</span>
+            <span class="s1">kwargs</span><span class="s2">: </span><span class="s1">Mapping</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">object</span><span class="s2">],</span>
+        <span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+            <span class="s0">if </span><span class="s1">outcome</span><span class="s2">.</span><span class="s1">exception </span><span class="s0">is None</span><span class="s2">:</span>
+                <span class="s1">hooktrace</span><span class="s2">(</span><span class="s5">&quot;finish&quot;</span><span class="s2">, </span><span class="s1">hook_name</span><span class="s2">, </span><span class="s5">&quot;--&gt;&quot;</span><span class="s2">, </span><span class="s1">outcome</span><span class="s2">.</span><span class="s1">get_result</span><span class="s2">())</span>
+            <span class="s1">hooktrace</span><span class="s2">.</span><span class="s1">root</span><span class="s2">.</span><span class="s1">indent </span><span class="s2">-= </span><span class="s6">1</span>
+
+        <span class="s0">return </span><span class="s1">self</span><span class="s2">.</span><span class="s1">add_hookcall_monitoring</span><span class="s2">(</span><span class="s1">before</span><span class="s2">, </span><span class="s1">after</span><span class="s2">)</span>
+
+    <span class="s0">def </span><span class="s1">subset_hook_caller</span><span class="s2">(</span>
+        <span class="s1">self</span><span class="s2">, </span><span class="s1">name</span><span class="s2">: </span><span class="s1">str</span><span class="s2">, </span><span class="s1">remove_plugins</span><span class="s2">: </span><span class="s1">Iterable</span><span class="s2">[</span><span class="s1">_Plugin</span><span class="s2">]</span>
+    <span class="s2">) </span><span class="s1">-&gt; HookCaller</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Return a proxy :class:`~pluggy.HookCaller` instance for the named 
+        method which manages calls to all registered plugins except the ones 
+        from remove_plugins.&quot;&quot;&quot;</span>
+        <span class="s1">orig</span><span class="s2">: </span><span class="s1">HookCaller </span><span class="s2">= </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">hook</span><span class="s2">, </span><span class="s1">name</span><span class="s2">)</span>
+        <span class="s1">plugins_to_remove </span><span class="s2">= {</span><span class="s1">plug </span><span class="s0">for </span><span class="s1">plug </span><span class="s0">in </span><span class="s1">remove_plugins </span><span class="s0">if </span><span class="s1">hasattr</span><span class="s2">(</span><span class="s1">plug</span><span class="s2">, </span><span class="s1">name</span><span class="s2">)}</span>
+        <span class="s0">if </span><span class="s1">plugins_to_remove</span><span class="s2">:</span>
+            <span class="s0">return </span><span class="s1">_SubsetHookCaller</span><span class="s2">(</span><span class="s1">orig</span><span class="s2">, </span><span class="s1">plugins_to_remove</span><span class="s2">)</span>
+        <span class="s0">return </span><span class="s1">orig</span>
+
+
+<span class="s0">def </span><span class="s1">_formatdef</span><span class="s2">(</span><span class="s1">func</span><span class="s2">: </span><span class="s1">Callable</span><span class="s2">[..., </span><span class="s1">object</span><span class="s2">]) </span><span class="s1">-&gt; str</span><span class="s2">:</span>
+    <span class="s0">return </span><span class="s5">f&quot;</span><span class="s0">{</span><span class="s1">func</span><span class="s2">.</span><span class="s1">__name__</span><span class="s0">}{</span><span class="s1">inspect</span><span class="s2">.</span><span class="s1">signature</span><span class="s2">(</span><span class="s1">func</span><span class="s2">)</span><span class="s0">}</span><span class="s5">&quot;</span>
+</pre>
+</body>
+</html>

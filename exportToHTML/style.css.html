@@ -1,0 +1,339 @@
+<html>
+<head>
+<title>style.css</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #bcbec4;}
+.s1 { color: #2aacb8;}
+.s2 { color: #7a7e85;}
+.s3 { color: #6aab73;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+style.css</font>
+</center></td></tr></table>
+<pre><span class="s0">body {</span>
+  <span class="s0">font-family: Helvetica, Arial, sans-serif;</span>
+  <span class="s0">font-size: </span><span class="s1">12</span><span class="s0">px;</span>
+  <span class="s2">/* do not increase min-width as some may use split screens */</span>
+  <span class="s0">min-width: </span><span class="s1">800</span><span class="s0">px;</span>
+  <span class="s0">color: #</span><span class="s1">999</span><span class="s0">;</span>
+<span class="s0">}</span>
+
+<span class="s0">h1 {</span>
+  <span class="s0">font-size: </span><span class="s1">24</span><span class="s0">px;</span>
+  <span class="s0">color: black;</span>
+<span class="s0">}</span>
+
+<span class="s0">h2 {</span>
+  <span class="s0">font-size: </span><span class="s1">16</span><span class="s0">px;</span>
+  <span class="s0">color: black;</span>
+<span class="s0">}</span>
+
+<span class="s0">p {</span>
+  <span class="s0">color: black;</span>
+<span class="s0">}</span>
+
+<span class="s0">a {</span>
+  <span class="s0">color: #</span><span class="s1">999</span><span class="s0">;</span>
+<span class="s0">}</span>
+
+<span class="s0">table {</span>
+  <span class="s0">border-collapse: collapse;</span>
+<span class="s0">}</span>
+
+<span class="s2">/****************************** 
+ * SUMMARY INFORMATION 
+ ******************************/</span>
+<span class="s0">#environment td {</span>
+  <span class="s0">padding: </span><span class="s1">5</span><span class="s0">px;</span>
+  <span class="s0">border: </span><span class="s1">1</span><span class="s0">px solid #e6e6e6;</span>
+  <span class="s0">vertical-align: top;</span>
+<span class="s0">}</span>
+<span class="s0">#environment tr:nth-child(odd) {</span>
+  <span class="s0">background-color: #f6f6f6;</span>
+<span class="s0">}</span>
+<span class="s0">#environment ul {</span>
+  <span class="s0">margin: </span><span class="s1">0</span><span class="s0">;</span>
+  <span class="s0">padding: </span><span class="s1">0 20</span><span class="s0">px;</span>
+<span class="s0">}</span>
+
+<span class="s2">/****************************** 
+ * TEST RESULT COLORS 
+ ******************************/</span>
+<span class="s0">span.passed,</span>
+<span class="s0">.passed .col-result {</span>
+  <span class="s0">color: green;</span>
+<span class="s0">}</span>
+
+<span class="s0">span.skipped,</span>
+<span class="s0">span.xfailed,</span>
+<span class="s0">span.rerun,</span>
+<span class="s0">.skipped .col-result,</span>
+<span class="s0">.xfailed .col-result,</span>
+<span class="s0">.rerun .col-result {</span>
+  <span class="s0">color: orange;</span>
+<span class="s0">}</span>
+
+<span class="s0">span.error,</span>
+<span class="s0">span.failed,</span>
+<span class="s0">span.xpassed,</span>
+<span class="s0">.error .col-result,</span>
+<span class="s0">.failed .col-result,</span>
+<span class="s0">.xpassed .col-result {</span>
+  <span class="s0">color: red;</span>
+<span class="s0">}</span>
+
+<span class="s0">.col-links__extra {</span>
+  <span class="s0">margin-right: </span><span class="s1">3</span><span class="s0">px;</span>
+<span class="s0">}</span>
+
+<span class="s2">/****************************** 
+ * RESULTS TABLE 
+ * 
+ * 1. Table Layout 
+ * 2. Extra 
+ * 3. Sorting items 
+ * 
+ ******************************/</span>
+<span class="s2">/*------------------ 
+ * 1. Table Layout 
+ *------------------*/</span>
+<span class="s0">#results-table {</span>
+  <span class="s0">border: </span><span class="s1">1</span><span class="s0">px solid #e6e6e6;</span>
+  <span class="s0">color: #</span><span class="s1">999</span><span class="s0">;</span>
+  <span class="s0">font-size: </span><span class="s1">12</span><span class="s0">px;</span>
+  <span class="s0">width: </span><span class="s1">100</span><span class="s0">%;</span>
+<span class="s0">}</span>
+<span class="s0">#results-table th,</span>
+<span class="s0">#results-table td {</span>
+  <span class="s0">padding: </span><span class="s1">5</span><span class="s0">px;</span>
+  <span class="s0">border: </span><span class="s1">1</span><span class="s0">px solid #e6e6e6;</span>
+  <span class="s0">text-align: left;</span>
+<span class="s0">}</span>
+<span class="s0">#results-table th {</span>
+  <span class="s0">font-weight: bold;</span>
+<span class="s0">}</span>
+
+<span class="s2">/*------------------ 
+ * 2. Extra 
+ *------------------*/</span>
+<span class="s0">.logwrapper {</span>
+  <span class="s0">max-height: </span><span class="s1">230</span><span class="s0">px;</span>
+  <span class="s0">overflow-y: scroll;</span>
+  <span class="s0">background-color: #e6e6e6;</span>
+<span class="s0">}</span>
+<span class="s0">.logwrapper.expanded {</span>
+  <span class="s0">max-height: none;</span>
+<span class="s0">}</span>
+<span class="s0">.logwrapper.expanded .logexpander:after {</span>
+  <span class="s0">content: </span><span class="s3">&quot;collapse [-]&quot;</span><span class="s0">;</span>
+<span class="s0">}</span>
+<span class="s0">.logwrapper .logexpander {</span>
+  <span class="s0">z-index: </span><span class="s1">1</span><span class="s0">;</span>
+  <span class="s0">position: sticky;</span>
+  <span class="s0">top: </span><span class="s1">10</span><span class="s0">px;</span>
+  <span class="s0">width: max-content;</span>
+  <span class="s0">border: </span><span class="s1">1</span><span class="s0">px solid;</span>
+  <span class="s0">border-radius: </span><span class="s1">3</span><span class="s0">px;</span>
+  <span class="s0">padding: </span><span class="s1">5</span><span class="s0">px </span><span class="s1">7</span><span class="s0">px;</span>
+  <span class="s0">margin: </span><span class="s1">10</span><span class="s0">px </span><span class="s1">0 10</span><span class="s0">px calc(</span><span class="s1">100</span><span class="s0">% - </span><span class="s1">80</span><span class="s0">px);</span>
+  <span class="s0">cursor: pointer;</span>
+  <span class="s0">background-color: #e6e6e6;</span>
+<span class="s0">}</span>
+<span class="s0">.logwrapper .logexpander:after {</span>
+  <span class="s0">content: </span><span class="s3">&quot;expand [+]&quot;</span><span class="s0">;</span>
+<span class="s0">}</span>
+<span class="s0">.logwrapper .logexpander:hover {</span>
+  <span class="s0">color: #</span><span class="s1">000</span><span class="s0">;</span>
+  <span class="s0">border-color: #</span><span class="s1">000</span><span class="s0">;</span>
+<span class="s0">}</span>
+<span class="s0">.logwrapper .log {</span>
+  <span class="s0">min-height: </span><span class="s1">40</span><span class="s0">px;</span>
+  <span class="s0">position: relative;</span>
+  <span class="s0">top: -</span><span class="s1">50</span><span class="s0">px;</span>
+  <span class="s0">height: calc(</span><span class="s1">100</span><span class="s0">% + </span><span class="s1">50</span><span class="s0">px);</span>
+  <span class="s0">border: </span><span class="s1">1</span><span class="s0">px solid #e6e6e6;</span>
+  <span class="s0">color: black;</span>
+  <span class="s0">display: block;</span>
+  <span class="s0">font-family: </span><span class="s3">&quot;Courier New&quot;</span><span class="s0">, Courier, monospace;</span>
+  <span class="s0">padding: </span><span class="s1">5</span><span class="s0">px;</span>
+  <span class="s0">padding-right: </span><span class="s1">80</span><span class="s0">px;</span>
+  <span class="s0">white-space: pre-wrap;</span>
+<span class="s0">}</span>
+
+<span class="s0">div.media {</span>
+  <span class="s0">border: </span><span class="s1">1</span><span class="s0">px solid #e6e6e6;</span>
+  <span class="s0">float: right;</span>
+  <span class="s0">height: </span><span class="s1">240</span><span class="s0">px;</span>
+  <span class="s0">margin: </span><span class="s1">0 5</span><span class="s0">px;</span>
+  <span class="s0">overflow: hidden;</span>
+  <span class="s0">width: </span><span class="s1">320</span><span class="s0">px;</span>
+<span class="s0">}</span>
+
+<span class="s0">.media-container {</span>
+  <span class="s0">display: grid;</span>
+  <span class="s0">grid-template-columns: </span><span class="s1">25</span><span class="s0">px auto </span><span class="s1">25</span><span class="s0">px;</span>
+  <span class="s0">align-items: center;</span>
+  <span class="s0">flex: </span><span class="s1">1 1</span><span class="s0">;</span>
+  <span class="s0">overflow: hidden;</span>
+  <span class="s0">height: </span><span class="s1">200</span><span class="s0">px;</span>
+<span class="s0">}</span>
+
+<span class="s0">.media-container--fullscreen {</span>
+  <span class="s0">grid-template-columns: </span><span class="s1">0</span><span class="s0">px auto </span><span class="s1">0</span><span class="s0">px;</span>
+<span class="s0">}</span>
+
+<span class="s0">.media-container__nav--right,</span>
+<span class="s0">.media-container__nav--left {</span>
+  <span class="s0">text-align: center;</span>
+  <span class="s0">cursor: pointer;</span>
+<span class="s0">}</span>
+
+<span class="s0">.media-container__viewport {</span>
+  <span class="s0">cursor: pointer;</span>
+  <span class="s0">text-align: center;</span>
+  <span class="s0">height: inherit;</span>
+<span class="s0">}</span>
+<span class="s0">.media-container__viewport img,</span>
+<span class="s0">.media-container__viewport video {</span>
+  <span class="s0">object-fit: cover;</span>
+  <span class="s0">width: </span><span class="s1">100</span><span class="s0">%;</span>
+  <span class="s0">max-height: </span><span class="s1">100</span><span class="s0">%;</span>
+<span class="s0">}</span>
+
+<span class="s0">.media__name,</span>
+<span class="s0">.media__counter {</span>
+  <span class="s0">display: flex;</span>
+  <span class="s0">flex-direction: row;</span>
+  <span class="s0">justify-content: space-around;</span>
+  <span class="s0">flex: </span><span class="s1">0 0 25</span><span class="s0">px;</span>
+  <span class="s0">align-items: center;</span>
+<span class="s0">}</span>
+
+<span class="s0">.collapsible td:not(.col-links) {</span>
+  <span class="s0">cursor: pointer;</span>
+<span class="s0">}</span>
+<span class="s0">.collapsible td:not(.col-links):hover::after {</span>
+  <span class="s0">color: #bbb;</span>
+  <span class="s0">font-style: italic;</span>
+  <span class="s0">cursor: pointer;</span>
+<span class="s0">}</span>
+
+<span class="s0">.col-result {</span>
+  <span class="s0">width: </span><span class="s1">130</span><span class="s0">px;</span>
+<span class="s0">}</span>
+<span class="s0">.col-result:hover::after {</span>
+  <span class="s0">content: </span><span class="s3">&quot; (hide details)&quot;</span><span class="s0">;</span>
+<span class="s0">}</span>
+
+<span class="s0">.col-result.collapsed:hover::after {</span>
+  <span class="s0">content: </span><span class="s3">&quot; (show details)&quot;</span><span class="s0">;</span>
+<span class="s0">}</span>
+
+<span class="s0">#environment-header h2:hover::after {</span>
+  <span class="s0">content: </span><span class="s3">&quot; (hide details)&quot;</span><span class="s0">;</span>
+  <span class="s0">color: #bbb;</span>
+  <span class="s0">font-style: italic;</span>
+  <span class="s0">cursor: pointer;</span>
+  <span class="s0">font-size: </span><span class="s1">12</span><span class="s0">px;</span>
+<span class="s0">}</span>
+
+<span class="s0">#environment-header.collapsed h2:hover::after {</span>
+  <span class="s0">content: </span><span class="s3">&quot; (show details)&quot;</span><span class="s0">;</span>
+  <span class="s0">color: #bbb;</span>
+  <span class="s0">font-style: italic;</span>
+  <span class="s0">cursor: pointer;</span>
+  <span class="s0">font-size: </span><span class="s1">12</span><span class="s0">px;</span>
+<span class="s0">}</span>
+
+<span class="s2">/*------------------ 
+ * 3. Sorting items 
+ *------------------*/</span>
+<span class="s0">.sortable {</span>
+  <span class="s0">cursor: pointer;</span>
+<span class="s0">}</span>
+<span class="s0">.sortable.desc:after {</span>
+  <span class="s0">content: </span><span class="s3">&quot; &quot;</span><span class="s0">;</span>
+  <span class="s0">position: relative;</span>
+  <span class="s0">left: </span><span class="s1">5</span><span class="s0">px;</span>
+  <span class="s0">bottom: -</span><span class="s1">12</span><span class="s0">.</span><span class="s1">5</span><span class="s0">px;</span>
+  <span class="s0">border: </span><span class="s1">10</span><span class="s0">px solid #</span><span class="s1">4</span><span class="s0">caf50;</span>
+  <span class="s0">border-bottom: </span><span class="s1">0</span><span class="s0">;</span>
+  <span class="s0">border-left-color: transparent;</span>
+  <span class="s0">border-right-color: transparent;</span>
+<span class="s0">}</span>
+<span class="s0">.sortable.asc:after {</span>
+  <span class="s0">content: </span><span class="s3">&quot; &quot;</span><span class="s0">;</span>
+  <span class="s0">position: relative;</span>
+  <span class="s0">left: </span><span class="s1">5</span><span class="s0">px;</span>
+  <span class="s0">bottom: </span><span class="s1">12</span><span class="s0">.</span><span class="s1">5</span><span class="s0">px;</span>
+  <span class="s0">border: </span><span class="s1">10</span><span class="s0">px solid #</span><span class="s1">4</span><span class="s0">caf50;</span>
+  <span class="s0">border-top: </span><span class="s1">0</span><span class="s0">;</span>
+  <span class="s0">border-left-color: transparent;</span>
+  <span class="s0">border-right-color: transparent;</span>
+<span class="s0">}</span>
+
+<span class="s0">.hidden, .summary__reload__button.hidden {</span>
+  <span class="s0">display: none;</span>
+<span class="s0">}</span>
+
+<span class="s0">.summary__data {</span>
+  <span class="s0">flex: </span><span class="s1">0 0 550</span><span class="s0">px;</span>
+<span class="s0">}</span>
+<span class="s0">.summary__reload {</span>
+  <span class="s0">flex: </span><span class="s1">1 1</span><span class="s0">;</span>
+  <span class="s0">display: flex;</span>
+  <span class="s0">justify-content: center;</span>
+<span class="s0">}</span>
+<span class="s0">.summary__reload__button {</span>
+  <span class="s0">flex: </span><span class="s1">0 0 300</span><span class="s0">px;</span>
+  <span class="s0">display: flex;</span>
+  <span class="s0">color: white;</span>
+  <span class="s0">font-weight: bold;</span>
+  <span class="s0">background-color: #</span><span class="s1">4</span><span class="s0">caf50;</span>
+  <span class="s0">text-align: center;</span>
+  <span class="s0">justify-content: center;</span>
+  <span class="s0">align-items: center;</span>
+  <span class="s0">border-radius: </span><span class="s1">3</span><span class="s0">px;</span>
+  <span class="s0">cursor: pointer;</span>
+<span class="s0">}</span>
+<span class="s0">.summary__reload__button:hover {</span>
+  <span class="s0">background-color: #</span><span class="s1">46</span><span class="s0">a049;</span>
+<span class="s0">}</span>
+<span class="s0">.summary__spacer {</span>
+  <span class="s0">flex: </span><span class="s1">0 0 550</span><span class="s0">px;</span>
+<span class="s0">}</span>
+
+<span class="s0">.controls {</span>
+  <span class="s0">display: flex;</span>
+  <span class="s0">justify-content: space-between;</span>
+<span class="s0">}</span>
+
+<span class="s0">.filters,</span>
+<span class="s0">.collapse {</span>
+  <span class="s0">display: flex;</span>
+  <span class="s0">align-items: center;</span>
+<span class="s0">}</span>
+<span class="s0">.filters button,</span>
+<span class="s0">.collapse button {</span>
+  <span class="s0">color: #</span><span class="s1">999</span><span class="s0">;</span>
+  <span class="s0">border: none;</span>
+  <span class="s0">background: none;</span>
+  <span class="s0">cursor: pointer;</span>
+  <span class="s0">text-decoration: underline;</span>
+<span class="s0">}</span>
+<span class="s0">.filters button:hover,</span>
+<span class="s0">.collapse button:hover {</span>
+  <span class="s0">color: #ccc;</span>
+<span class="s0">}</span>
+
+<span class="s0">.filter__label {</span>
+  <span class="s0">margin-right: </span><span class="s1">10</span><span class="s0">px;</span>
+<span class="s0">}</span>
+</pre>
+</body>
+</html>

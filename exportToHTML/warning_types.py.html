@@ -1,0 +1,192 @@
+<html>
+<head>
+<title>warning_types.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #5f826b; font-style: italic;}
+.s4 { color: #6aab73;}
+.s5 { color: #7a7e85;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+warning_types.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">dataclasses</span>
+<span class="s0">import </span><span class="s1">inspect</span>
+<span class="s0">import </span><span class="s1">warnings</span>
+<span class="s0">from </span><span class="s1">types </span><span class="s0">import </span><span class="s1">FunctionType</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Any</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Generic</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Type</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">TypeVar</span>
+
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">compat </span><span class="s0">import </span><span class="s1">final</span>
+
+
+<span class="s0">class </span><span class="s1">PytestWarning</span><span class="s2">(</span><span class="s1">UserWarning</span><span class="s2">):</span>
+    <span class="s3">&quot;&quot;&quot;Base class for all warnings emitted by pytest.&quot;&quot;&quot;</span>
+
+    <span class="s1">__module__ </span><span class="s2">= </span><span class="s4">&quot;pytest&quot;</span>
+
+
+<span class="s2">@</span><span class="s1">final</span>
+<span class="s0">class </span><span class="s1">PytestAssertRewriteWarning</span><span class="s2">(</span><span class="s1">PytestWarning</span><span class="s2">):</span>
+    <span class="s3">&quot;&quot;&quot;Warning emitted by the pytest assert rewrite module.&quot;&quot;&quot;</span>
+
+    <span class="s1">__module__ </span><span class="s2">= </span><span class="s4">&quot;pytest&quot;</span>
+
+
+<span class="s2">@</span><span class="s1">final</span>
+<span class="s0">class </span><span class="s1">PytestCacheWarning</span><span class="s2">(</span><span class="s1">PytestWarning</span><span class="s2">):</span>
+    <span class="s3">&quot;&quot;&quot;Warning emitted by the cache plugin in various situations.&quot;&quot;&quot;</span>
+
+    <span class="s1">__module__ </span><span class="s2">= </span><span class="s4">&quot;pytest&quot;</span>
+
+
+<span class="s2">@</span><span class="s1">final</span>
+<span class="s0">class </span><span class="s1">PytestConfigWarning</span><span class="s2">(</span><span class="s1">PytestWarning</span><span class="s2">):</span>
+    <span class="s3">&quot;&quot;&quot;Warning emitted for configuration issues.&quot;&quot;&quot;</span>
+
+    <span class="s1">__module__ </span><span class="s2">= </span><span class="s4">&quot;pytest&quot;</span>
+
+
+<span class="s2">@</span><span class="s1">final</span>
+<span class="s0">class </span><span class="s1">PytestCollectionWarning</span><span class="s2">(</span><span class="s1">PytestWarning</span><span class="s2">):</span>
+    <span class="s3">&quot;&quot;&quot;Warning emitted when pytest is not able to collect a file or symbol in a module.&quot;&quot;&quot;</span>
+
+    <span class="s1">__module__ </span><span class="s2">= </span><span class="s4">&quot;pytest&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">PytestDeprecationWarning</span><span class="s2">(</span><span class="s1">PytestWarning</span><span class="s2">, </span><span class="s1">DeprecationWarning</span><span class="s2">):</span>
+    <span class="s3">&quot;&quot;&quot;Warning class for features that will be removed in a future version.&quot;&quot;&quot;</span>
+
+    <span class="s1">__module__ </span><span class="s2">= </span><span class="s4">&quot;pytest&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">PytestRemovedIn8Warning</span><span class="s2">(</span><span class="s1">PytestDeprecationWarning</span><span class="s2">):</span>
+    <span class="s3">&quot;&quot;&quot;Warning class for features that will be removed in pytest 8.&quot;&quot;&quot;</span>
+
+    <span class="s1">__module__ </span><span class="s2">= </span><span class="s4">&quot;pytest&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">PytestReturnNotNoneWarning</span><span class="s2">(</span><span class="s1">PytestRemovedIn8Warning</span><span class="s2">):</span>
+    <span class="s3">&quot;&quot;&quot;Warning emitted when a test function is returning value other than None.&quot;&quot;&quot;</span>
+
+    <span class="s1">__module__ </span><span class="s2">= </span><span class="s4">&quot;pytest&quot;</span>
+
+
+<span class="s2">@</span><span class="s1">final</span>
+<span class="s0">class </span><span class="s1">PytestExperimentalApiWarning</span><span class="s2">(</span><span class="s1">PytestWarning</span><span class="s2">, </span><span class="s1">FutureWarning</span><span class="s2">):</span>
+    <span class="s3">&quot;&quot;&quot;Warning category used to denote experiments in pytest. 
+ 
+    Use sparingly as the API might change or even be removed completely in a 
+    future version. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__module__ </span><span class="s2">= </span><span class="s4">&quot;pytest&quot;</span>
+
+    <span class="s2">@</span><span class="s1">classmethod</span>
+    <span class="s0">def </span><span class="s1">simple</span><span class="s2">(</span><span class="s1">cls</span><span class="s2">, </span><span class="s1">apiname</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s4">&quot;PytestExperimentalApiWarning&quot;</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">cls</span><span class="s2">(</span>
+            <span class="s4">&quot;{apiname} is an experimental api that may change over time&quot;</span><span class="s2">.</span><span class="s1">format</span><span class="s2">(</span>
+                <span class="s1">apiname</span><span class="s2">=</span><span class="s1">apiname</span>
+            <span class="s2">)</span>
+        <span class="s2">)</span>
+
+
+<span class="s2">@</span><span class="s1">final</span>
+<span class="s0">class </span><span class="s1">PytestUnhandledCoroutineWarning</span><span class="s2">(</span><span class="s1">PytestReturnNotNoneWarning</span><span class="s2">):</span>
+    <span class="s3">&quot;&quot;&quot;Warning emitted for an unhandled coroutine. 
+ 
+    A coroutine was encountered when collecting test functions, but was not 
+    handled by any async-aware plugin. 
+    Coroutine test functions are not natively supported. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__module__ </span><span class="s2">= </span><span class="s4">&quot;pytest&quot;</span>
+
+
+<span class="s2">@</span><span class="s1">final</span>
+<span class="s0">class </span><span class="s1">PytestUnknownMarkWarning</span><span class="s2">(</span><span class="s1">PytestWarning</span><span class="s2">):</span>
+    <span class="s3">&quot;&quot;&quot;Warning emitted on use of unknown markers. 
+ 
+    See :ref:`mark` for details. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__module__ </span><span class="s2">= </span><span class="s4">&quot;pytest&quot;</span>
+
+
+<span class="s2">@</span><span class="s1">final</span>
+<span class="s0">class </span><span class="s1">PytestUnraisableExceptionWarning</span><span class="s2">(</span><span class="s1">PytestWarning</span><span class="s2">):</span>
+    <span class="s3">&quot;&quot;&quot;An unraisable exception was reported. 
+ 
+    Unraisable exceptions are exceptions raised in :meth:`__del__ &lt;object.__del__&gt;` 
+    implementations and similar situations when the exception cannot be raised 
+    as normal. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__module__ </span><span class="s2">= </span><span class="s4">&quot;pytest&quot;</span>
+
+
+<span class="s2">@</span><span class="s1">final</span>
+<span class="s0">class </span><span class="s1">PytestUnhandledThreadExceptionWarning</span><span class="s2">(</span><span class="s1">PytestWarning</span><span class="s2">):</span>
+    <span class="s3">&quot;&quot;&quot;An unhandled exception occurred in a :class:`~threading.Thread`. 
+ 
+    Such exceptions don't propagate normally. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__module__ </span><span class="s2">= </span><span class="s4">&quot;pytest&quot;</span>
+
+
+<span class="s1">_W </span><span class="s2">= </span><span class="s1">TypeVar</span><span class="s2">(</span><span class="s4">&quot;_W&quot;</span><span class="s2">, </span><span class="s1">bound</span><span class="s2">=</span><span class="s1">PytestWarning</span><span class="s2">)</span>
+
+
+<span class="s2">@</span><span class="s1">final</span>
+<span class="s2">@</span><span class="s1">dataclasses</span><span class="s2">.</span><span class="s1">dataclass</span>
+<span class="s0">class </span><span class="s1">UnformattedWarning</span><span class="s2">(</span><span class="s1">Generic</span><span class="s2">[</span><span class="s1">_W</span><span class="s2">]):</span>
+    <span class="s3">&quot;&quot;&quot;A warning meant to be formatted during runtime. 
+ 
+    This is used to hold warnings that need to format their message at runtime, 
+    as opposed to a direct message. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">category</span><span class="s2">: </span><span class="s1">Type</span><span class="s2">[</span><span class="s4">&quot;_W&quot;</span><span class="s2">]</span>
+    <span class="s1">template</span><span class="s2">: </span><span class="s1">str</span>
+
+    <span class="s0">def </span><span class="s1">format</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, **</span><span class="s1">kwargs</span><span class="s2">: </span><span class="s1">Any</span><span class="s2">) </span><span class="s1">-&gt; _W</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Return an instance of the warning category, formatted with given kwargs.&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self</span><span class="s2">.</span><span class="s1">category</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">template</span><span class="s2">.</span><span class="s1">format</span><span class="s2">(**</span><span class="s1">kwargs</span><span class="s2">))</span>
+
+
+<span class="s0">def </span><span class="s1">warn_explicit_for</span><span class="s2">(</span><span class="s1">method</span><span class="s2">: </span><span class="s1">FunctionType</span><span class="s2">, </span><span class="s1">message</span><span class="s2">: </span><span class="s1">PytestWarning</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+    <span class="s3">&quot;&quot;&quot; 
+    Issue the warning :param:`message` for the definition of the given :param:`method` 
+ 
+    this helps to log warnings for functions defined prior to finding an issue with them 
+    (like hook wrappers being marked in a legacy mechanism) 
+    &quot;&quot;&quot;</span>
+    <span class="s1">lineno </span><span class="s2">= </span><span class="s1">method</span><span class="s2">.</span><span class="s1">__code__</span><span class="s2">.</span><span class="s1">co_firstlineno</span>
+    <span class="s1">filename </span><span class="s2">= </span><span class="s1">inspect</span><span class="s2">.</span><span class="s1">getfile</span><span class="s2">(</span><span class="s1">method</span><span class="s2">)</span>
+    <span class="s1">module </span><span class="s2">= </span><span class="s1">method</span><span class="s2">.</span><span class="s1">__module__</span>
+    <span class="s1">mod_globals </span><span class="s2">= </span><span class="s1">method</span><span class="s2">.</span><span class="s1">__globals__</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s1">warnings</span><span class="s2">.</span><span class="s1">warn_explicit</span><span class="s2">(</span>
+            <span class="s1">message</span><span class="s2">,</span>
+            <span class="s1">type</span><span class="s2">(</span><span class="s1">message</span><span class="s2">),</span>
+            <span class="s1">filename</span><span class="s2">=</span><span class="s1">filename</span><span class="s2">,</span>
+            <span class="s1">module</span><span class="s2">=</span><span class="s1">module</span><span class="s2">,</span>
+            <span class="s1">registry</span><span class="s2">=</span><span class="s1">mod_globals</span><span class="s2">.</span><span class="s1">setdefault</span><span class="s2">(</span><span class="s4">&quot;__warningregistry__&quot;</span><span class="s2">, {}),</span>
+            <span class="s1">lineno</span><span class="s2">=</span><span class="s1">lineno</span><span class="s2">,</span>
+        <span class="s2">)</span>
+    <span class="s0">except </span><span class="s1">Warning </span><span class="s0">as </span><span class="s1">w</span><span class="s2">:</span>
+        <span class="s5"># If warnings are errors (e.g. -Werror), location information gets lost, so we add it to the message.</span>
+        <span class="s0">raise </span><span class="s1">type</span><span class="s2">(</span><span class="s1">w</span><span class="s2">)(</span><span class="s4">f&quot;</span><span class="s0">{</span><span class="s1">w</span><span class="s0">}\n </span><span class="s4">at </span><span class="s0">{</span><span class="s1">filename</span><span class="s0">}</span><span class="s4">:</span><span class="s0">{</span><span class="s1">lineno</span><span class="s0">}</span><span class="s4">&quot;</span><span class="s2">) </span><span class="s0">from None</span>
+</pre>
+</body>
+</html>

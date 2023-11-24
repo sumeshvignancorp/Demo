@@ -1,0 +1,137 @@
+<html>
+<head>
+<title>index.jinja2</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #bcbec4;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+index.jinja2</font>
+</center></td></tr></table>
+<pre><span class="s0">&lt;!DOCTYPE html&gt;</span>
+<span class="s0">&lt;html&gt;</span>
+  <span class="s0">&lt;head&gt;</span>
+    <span class="s0">&lt;meta charset=&quot;utf-8&quot;/&gt;</span>
+    <span class="s0">&lt;title id=&quot;head-title&quot;&gt;{{ title }}&lt;/title&gt;</span>
+    <span class="s0">{%- if self_contained %}</span>
+      <span class="s0">&lt;style type=&quot;text/css&quot;&gt;</span>
+        <span class="s0">{{- styles|safe }}</span>
+      <span class="s0">&lt;/style&gt;</span>
+    <span class="s0">{% else %}</span>
+      <span class="s0">&lt;link href=&quot;{{ styles }}&quot; rel=&quot;stylesheet&quot; type=&quot;text/css&quot;/&gt;</span>
+    <span class="s0">{%- endif %}</span>
+  <span class="s0">&lt;/head&gt;</span>
+  <span class="s0">&lt;body&gt;</span>
+    <span class="s0">&lt;h1 id=&quot;title&quot;&gt;{{ title }}&lt;/h1&gt;</span>
+    <span class="s0">&lt;p&gt;Report generated on {{ date }} at {{ time }} by &lt;a href=&quot;https://pypi.python.org/pypi/pytest-html&quot;&gt;pytest-html&lt;/a&gt;</span>
+        <span class="s0">v{{ version }}&lt;/p&gt;</span>
+    <span class="s0">&lt;div id=&quot;environment-header&quot;&gt;</span>
+      <span class="s0">&lt;h2&gt;Environment&lt;/h2&gt;</span>
+    <span class="s0">&lt;/div&gt;</span>
+    <span class="s0">&lt;table id=&quot;environment&quot;&gt;&lt;/table&gt;</span>
+    <span class="s0">&lt;!-- TEMPLATES --&gt;</span>
+      <span class="s0">&lt;template id=&quot;template_environment_row&quot;&gt;</span>
+      <span class="s0">&lt;tr&gt;</span>
+        <span class="s0">&lt;td&gt;&lt;/td&gt;</span>
+        <span class="s0">&lt;td&gt;&lt;/td&gt;</span>
+      <span class="s0">&lt;/tr&gt;</span>
+    <span class="s0">&lt;/template&gt;</span>
+    <span class="s0">&lt;template id=&quot;template_results-table__body--empty&quot;&gt;</span>
+      <span class="s0">&lt;tbody class=&quot;results-table-row&quot;&gt;</span>
+        <span class="s0">&lt;tr id=&quot;not-found-message&quot;&gt;</span>
+          <span class="s0">&lt;td colspan=&quot;{{ table_head|length }}&quot;&gt;No results found. Check the filters.&lt;/th&gt;</span>
+        <span class="s0">&lt;/tr&gt;</span>
+    <span class="s0">&lt;/template&gt;</span>
+    <span class="s0">&lt;template id=&quot;template_results-table__tbody&quot;&gt;</span>
+      <span class="s0">&lt;tbody class=&quot;results-table-row&quot;&gt;</span>
+        <span class="s0">&lt;tr class=&quot;collapsible&quot;&gt;</span>
+        <span class="s0">&lt;/tr&gt;</span>
+        <span class="s0">&lt;tr class=&quot;extras-row&quot;&gt;</span>
+          <span class="s0">&lt;td class=&quot;extra&quot; colspan=&quot;{{ table_head|length }}&quot;&gt;</span>
+            <span class="s0">&lt;div class=&quot;extraHTML&quot;&gt;&lt;/div&gt;</span>
+            <span class="s0">&lt;div class=&quot;media&quot;&gt;</span>
+              <span class="s0">&lt;div class=&quot;media-container&quot;&gt;</span>
+                  <span class="s0">&lt;div class=&quot;media-container__nav--left&quot;&gt;&lt;&lt;/div&gt;</span>
+                  <span class="s0">&lt;div class=&quot;media-container__viewport&quot;&gt;</span>
+                    <span class="s0">&lt;img src=&quot;&quot; /&gt;</span>
+                    <span class="s0">&lt;video controls&gt;</span>
+                      <span class="s0">&lt;source src=&quot;&quot; type=&quot;video/mp4&quot;&gt;</span>
+                    <span class="s0">&lt;/video&gt;</span>
+                  <span class="s0">&lt;/div&gt;</span>
+                  <span class="s0">&lt;div class=&quot;media-container__nav--right&quot;&gt;&gt;&lt;/div&gt;</span>
+                <span class="s0">&lt;/div&gt;</span>
+                <span class="s0">&lt;div class=&quot;media__name&quot;&gt;&lt;/div&gt;</span>
+                <span class="s0">&lt;div class=&quot;media__counter&quot;&gt;&lt;/div&gt;</span>
+            <span class="s0">&lt;/div&gt;</span>
+            <span class="s0">&lt;div class=&quot;logwrapper&quot;&gt;</span>
+              <span class="s0">&lt;div class=&quot;logexpander&quot;&gt;&lt;/div&gt;</span>
+              <span class="s0">&lt;div class=&quot;log&quot;&gt;&lt;/div&gt;</span>
+            <span class="s0">&lt;/div&gt;</span>
+          <span class="s0">&lt;/td&gt;</span>
+        <span class="s0">&lt;/tr&gt;</span>
+      <span class="s0">&lt;/tbody&gt;</span>
+    <span class="s0">&lt;/template&gt;</span>
+    <span class="s0">&lt;!-- END TEMPLATES --&gt;</span>
+    <span class="s0">&lt;div class=&quot;summary&quot;&gt;</span>
+      <span class="s0">&lt;div class=&quot;summary__data&quot;&gt;</span>
+        <span class="s0">&lt;h2&gt;Summary&lt;/h2&gt;</span>
+        <span class="s0">&lt;div class=&quot;additional-summary prefix&quot;&gt;</span>
+          <span class="s0">{%- for p in additional_summary['prefix'] %}</span>
+          <span class="s0">{{ p|safe }}</span>
+          <span class="s0">{%- endfor %}</span>
+        <span class="s0">&lt;/div&gt;</span>
+        <span class="s0">&lt;p class=&quot;run-count&quot;&gt;{{ run_count }}&lt;/p&gt;</span>
+        <span class="s0">&lt;p class=&quot;filter&quot;&gt;(Un)check the boxes to filter the results.&lt;/p&gt;</span>
+        <span class="s0">&lt;div class=&quot;summary__reload&quot;&gt;</span>
+          <span class="s0">&lt;div class=&quot;summary__reload__button {{ 'hidden' if running_state == 'finished' }}&quot; onclick=&quot;location.reload()&quot;&gt;</span>
+            <span class="s0">&lt;div&gt;There are still tests running. &lt;br /&gt;Reload this page to ge the latest results!&lt;/div&gt;</span>
+          <span class="s0">&lt;/div&gt;</span>
+        <span class="s0">&lt;/div&gt;</span>
+        <span class="s0">&lt;div class=&quot;summary__spacer&quot;&gt;&lt;/div&gt;</span>
+        <span class="s0">&lt;div class=&quot;controls&quot;&gt;</span>
+          <span class="s0">&lt;div class=&quot;filters&quot;&gt;</span>
+          <span class="s0">{%- for result, values in outcomes.items() %}</span>
+            <span class="s0">&lt;input checked=&quot;true&quot; class=&quot;filter&quot; name=&quot;filter_checkbox&quot; type=&quot;checkbox&quot; data-test-result=&quot;{{ result }}&quot; {{ &quot;disabled&quot; if values[&quot;value&quot;] == 0 }}/&gt;</span>
+            <span class="s0">&lt;span class=&quot;{{ result }}&quot;&gt;{{ values[&quot;value&quot;] }} {{ values[&quot;label&quot;] }}{{ &quot;,&quot; if result != &quot;rerun&quot; }}&lt;/span&gt;</span>
+          <span class="s0">{%- endfor %}</span>
+          <span class="s0">&lt;/div&gt;</span>
+          <span class="s0">&lt;div class=&quot;collapse&quot;&gt;</span>
+            <span class="s0">&lt;button id=&quot;show_all_details&quot;&gt;Show all details&lt;/button&gt;&amp;nbsp;/&amp;nbsp;&lt;button id=&quot;hide_all_details&quot;&gt;Hide all details&lt;/button&gt;</span>
+          <span class="s0">&lt;/div&gt;</span>
+        <span class="s0">&lt;/div&gt;</span>
+      <span class="s0">&lt;/div&gt;</span>
+      <span class="s0">&lt;div class=&quot;additional-summary summary&quot;&gt;</span>
+        <span class="s0">{%- for s in additional_summary['summary'] %}</span>
+        <span class="s0">{{ s|safe }}</span>
+        <span class="s0">{%- endfor %}</span>
+      <span class="s0">&lt;/div&gt;</span>
+      <span class="s0">&lt;div class=&quot;additional-summary postfix&quot;&gt;</span>
+        <span class="s0">{%- for p in additional_summary['postfix'] %}</span>
+        <span class="s0">{{ p|safe }}</span>
+        <span class="s0">{%- endfor %}</span>
+      <span class="s0">&lt;/div&gt;</span>
+    <span class="s0">&lt;/div&gt;</span>
+    <span class="s0">&lt;table id=&quot;results-table&quot;&gt;</span>
+      <span class="s0">&lt;thead id=&quot;results-table-head&quot;&gt;</span>
+        <span class="s0">&lt;tr&gt;</span>
+        <span class="s0">{%- for th in table_head %}</span>
+          <span class="s0">{{ th|safe }}</span>
+        <span class="s0">{%- endfor %}</span>
+        <span class="s0">&lt;/tr&gt;</span>
+      <span class="s0">&lt;/thead&gt;</span>
+    <span class="s0">&lt;/table&gt;</span>
+  <span class="s0">&lt;/body&gt;</span>
+  <span class="s0">&lt;footer&gt;</span>
+    <span class="s0">&lt;div id=&quot;data-container&quot; data-jsonblob=&quot;{{ test_data }}&quot;&gt;&lt;/div&gt;</span>
+    <span class="s0">&lt;script&gt;</span>
+      <span class="s0">{% include &quot;app.js&quot; %}</span>
+    <span class="s0">&lt;/script&gt;</span>
+  <span class="s0">&lt;/footer&gt;</span>
+<span class="s0">&lt;/html&gt;</span>
+</pre>
+</body>
+</html>

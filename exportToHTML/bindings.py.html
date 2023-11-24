@@ -1,0 +1,453 @@
+<html>
+<head>
+<title>bindings.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #7a7e85;}
+.s1 { color: #bcbec4;}
+.s2 { color: #5f826b; font-style: italic;}
+.s3 { color: #cf8e6d;}
+.s4 { color: #bcbec4;}
+.s5 { color: #6aab73;}
+.s6 { color: #2aacb8;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+bindings.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># type: ignore</span>
+
+<span class="s2">&quot;&quot;&quot; 
+This module uses ctypes to bind a whole bunch of functions and constants from 
+SecureTransport. The goal here is to provide the low-level API to 
+SecureTransport. These are essentially the C-level functions and constants, and 
+they're pretty gross to work with. 
+ 
+This code is a bastardised version of the code found in Will Bond's oscrypto 
+library. An enormous debt is owed to him for blazing this trail for us. For 
+that reason, this code should be considered to be covered both by urllib3's 
+license and by oscrypto's: 
+ 
+    Copyright (c) 2015-2016 Will Bond &lt;will@wbond.net&gt; 
+ 
+    Permission is hereby granted, free of charge, to any person obtaining a 
+    copy of this software and associated documentation files (the &quot;Software&quot;), 
+    to deal in the Software without restriction, including without limitation 
+    the rights to use, copy, modify, merge, publish, distribute, sublicense, 
+    and/or sell copies of the Software, and to permit persons to whom the 
+    Software is furnished to do so, subject to the following conditions: 
+ 
+    The above copyright notice and this permission notice shall be included in 
+    all copies or substantial portions of the Software. 
+ 
+    THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
+    DEALINGS IN THE SOFTWARE. 
+&quot;&quot;&quot;</span>
+
+<span class="s3">from </span><span class="s1">__future__ </span><span class="s3">import </span><span class="s1">annotations</span>
+
+<span class="s3">import </span><span class="s1">platform</span>
+<span class="s3">from </span><span class="s1">ctypes </span><span class="s3">import </span><span class="s4">(</span>
+    <span class="s1">CDLL</span><span class="s4">,</span>
+    <span class="s1">CFUNCTYPE</span><span class="s4">,</span>
+    <span class="s1">POINTER</span><span class="s4">,</span>
+    <span class="s1">c_bool</span><span class="s4">,</span>
+    <span class="s1">c_byte</span><span class="s4">,</span>
+    <span class="s1">c_char_p</span><span class="s4">,</span>
+    <span class="s1">c_int32</span><span class="s4">,</span>
+    <span class="s1">c_long</span><span class="s4">,</span>
+    <span class="s1">c_size_t</span><span class="s4">,</span>
+    <span class="s1">c_uint32</span><span class="s4">,</span>
+    <span class="s1">c_ulong</span><span class="s4">,</span>
+    <span class="s1">c_void_p</span><span class="s4">,</span>
+<span class="s4">)</span>
+<span class="s3">from </span><span class="s1">ctypes</span><span class="s4">.</span><span class="s1">util </span><span class="s3">import </span><span class="s1">find_library</span>
+
+<span class="s3">if </span><span class="s1">platform</span><span class="s4">.</span><span class="s1">system</span><span class="s4">() != </span><span class="s5">&quot;Darwin&quot;</span><span class="s4">:</span>
+    <span class="s3">raise </span><span class="s1">ImportError</span><span class="s4">(</span><span class="s5">&quot;Only macOS is supported&quot;</span><span class="s4">)</span>
+
+<span class="s1">version </span><span class="s4">= </span><span class="s1">platform</span><span class="s4">.</span><span class="s1">mac_ver</span><span class="s4">()[</span><span class="s6">0</span><span class="s4">]</span>
+<span class="s1">version_info </span><span class="s4">= </span><span class="s1">tuple</span><span class="s4">(</span><span class="s1">map</span><span class="s4">(</span><span class="s1">int</span><span class="s4">, </span><span class="s1">version</span><span class="s4">.</span><span class="s1">split</span><span class="s4">(</span><span class="s5">&quot;.&quot;</span><span class="s4">)))</span>
+<span class="s3">if </span><span class="s1">version_info </span><span class="s4">&lt; (</span><span class="s6">10</span><span class="s4">, </span><span class="s6">8</span><span class="s4">):</span>
+    <span class="s3">raise </span><span class="s1">OSError</span><span class="s4">(</span>
+        <span class="s5">f&quot;Only OS X 10.8 and newer are supported, not </span><span class="s3">{</span><span class="s1">version_info</span><span class="s4">[</span><span class="s6">0</span><span class="s4">]</span><span class="s3">}</span><span class="s5">.</span><span class="s3">{</span><span class="s1">version_info</span><span class="s4">[</span><span class="s6">1</span><span class="s4">]</span><span class="s3">}</span><span class="s5">&quot;</span>
+    <span class="s4">)</span>
+
+
+<span class="s3">def </span><span class="s1">load_cdll</span><span class="s4">(</span><span class="s1">name</span><span class="s4">: </span><span class="s1">str</span><span class="s4">, </span><span class="s1">macos10_16_path</span><span class="s4">: </span><span class="s1">str</span><span class="s4">) </span><span class="s1">-&gt; CDLL</span><span class="s4">:</span>
+    <span class="s2">&quot;&quot;&quot;Loads a CDLL by name, falling back to known path on 10.16+&quot;&quot;&quot;</span>
+    <span class="s3">try</span><span class="s4">:</span>
+        <span class="s0"># Big Sur is technically 11 but we use 10.16 due to the Big Sur</span>
+        <span class="s0"># beta being labeled as 10.16.</span>
+        <span class="s1">path</span><span class="s4">: </span><span class="s1">str </span><span class="s4">| </span><span class="s3">None</span>
+        <span class="s3">if </span><span class="s1">version_info </span><span class="s4">&gt;= (</span><span class="s6">10</span><span class="s4">, </span><span class="s6">16</span><span class="s4">):</span>
+            <span class="s1">path </span><span class="s4">= </span><span class="s1">macos10_16_path</span>
+        <span class="s3">else</span><span class="s4">:</span>
+            <span class="s1">path </span><span class="s4">= </span><span class="s1">find_library</span><span class="s4">(</span><span class="s1">name</span><span class="s4">)</span>
+        <span class="s3">if not </span><span class="s1">path</span><span class="s4">:</span>
+            <span class="s3">raise </span><span class="s1">OSError  </span><span class="s0"># Caught and reraised as 'ImportError'</span>
+        <span class="s3">return </span><span class="s1">CDLL</span><span class="s4">(</span><span class="s1">path</span><span class="s4">, </span><span class="s1">use_errno</span><span class="s4">=</span><span class="s3">True</span><span class="s4">)</span>
+    <span class="s3">except </span><span class="s1">OSError</span><span class="s4">:</span>
+        <span class="s3">raise </span><span class="s1">ImportError</span><span class="s4">(</span><span class="s5">f&quot;The library </span><span class="s3">{</span><span class="s1">name</span><span class="s3">} </span><span class="s5">failed to load&quot;</span><span class="s4">) </span><span class="s3">from None</span>
+
+
+<span class="s1">Security </span><span class="s4">= </span><span class="s1">load_cdll</span><span class="s4">(</span>
+    <span class="s5">&quot;Security&quot;</span><span class="s4">, </span><span class="s5">&quot;/System/Library/Frameworks/Security.framework/Security&quot;</span>
+<span class="s4">)</span>
+<span class="s1">CoreFoundation </span><span class="s4">= </span><span class="s1">load_cdll</span><span class="s4">(</span>
+    <span class="s5">&quot;CoreFoundation&quot;</span><span class="s4">,</span>
+    <span class="s5">&quot;/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation&quot;</span><span class="s4">,</span>
+<span class="s4">)</span>
+
+
+<span class="s1">Boolean </span><span class="s4">= </span><span class="s1">c_bool</span>
+<span class="s1">CFIndex </span><span class="s4">= </span><span class="s1">c_long</span>
+<span class="s1">CFStringEncoding </span><span class="s4">= </span><span class="s1">c_uint32</span>
+<span class="s1">CFData </span><span class="s4">= </span><span class="s1">c_void_p</span>
+<span class="s1">CFString </span><span class="s4">= </span><span class="s1">c_void_p</span>
+<span class="s1">CFArray </span><span class="s4">= </span><span class="s1">c_void_p</span>
+<span class="s1">CFMutableArray </span><span class="s4">= </span><span class="s1">c_void_p</span>
+<span class="s1">CFDictionary </span><span class="s4">= </span><span class="s1">c_void_p</span>
+<span class="s1">CFError </span><span class="s4">= </span><span class="s1">c_void_p</span>
+<span class="s1">CFType </span><span class="s4">= </span><span class="s1">c_void_p</span>
+<span class="s1">CFTypeID </span><span class="s4">= </span><span class="s1">c_ulong</span>
+
+<span class="s1">CFTypeRef </span><span class="s4">= </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">CFType</span><span class="s4">)</span>
+<span class="s1">CFAllocatorRef </span><span class="s4">= </span><span class="s1">c_void_p</span>
+
+<span class="s1">OSStatus </span><span class="s4">= </span><span class="s1">c_int32</span>
+
+<span class="s1">CFDataRef </span><span class="s4">= </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">CFData</span><span class="s4">)</span>
+<span class="s1">CFStringRef </span><span class="s4">= </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">CFString</span><span class="s4">)</span>
+<span class="s1">CFArrayRef </span><span class="s4">= </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">CFArray</span><span class="s4">)</span>
+<span class="s1">CFMutableArrayRef </span><span class="s4">= </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">CFMutableArray</span><span class="s4">)</span>
+<span class="s1">CFDictionaryRef </span><span class="s4">= </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">CFDictionary</span><span class="s4">)</span>
+<span class="s1">CFArrayCallBacks </span><span class="s4">= </span><span class="s1">c_void_p</span>
+<span class="s1">CFDictionaryKeyCallBacks </span><span class="s4">= </span><span class="s1">c_void_p</span>
+<span class="s1">CFDictionaryValueCallBacks </span><span class="s4">= </span><span class="s1">c_void_p</span>
+
+<span class="s1">SecCertificateRef </span><span class="s4">= </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">c_void_p</span><span class="s4">)</span>
+<span class="s1">SecExternalFormat </span><span class="s4">= </span><span class="s1">c_uint32</span>
+<span class="s1">SecExternalItemType </span><span class="s4">= </span><span class="s1">c_uint32</span>
+<span class="s1">SecIdentityRef </span><span class="s4">= </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">c_void_p</span><span class="s4">)</span>
+<span class="s1">SecItemImportExportFlags </span><span class="s4">= </span><span class="s1">c_uint32</span>
+<span class="s1">SecItemImportExportKeyParameters </span><span class="s4">= </span><span class="s1">c_void_p</span>
+<span class="s1">SecKeychainRef </span><span class="s4">= </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">c_void_p</span><span class="s4">)</span>
+<span class="s1">SSLProtocol </span><span class="s4">= </span><span class="s1">c_uint32</span>
+<span class="s1">SSLCipherSuite </span><span class="s4">= </span><span class="s1">c_uint32</span>
+<span class="s1">SSLContextRef </span><span class="s4">= </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">c_void_p</span><span class="s4">)</span>
+<span class="s1">SecTrustRef </span><span class="s4">= </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">c_void_p</span><span class="s4">)</span>
+<span class="s1">SSLConnectionRef </span><span class="s4">= </span><span class="s1">c_uint32</span>
+<span class="s1">SecTrustResultType </span><span class="s4">= </span><span class="s1">c_uint32</span>
+<span class="s1">SecTrustOptionFlags </span><span class="s4">= </span><span class="s1">c_uint32</span>
+<span class="s1">SSLProtocolSide </span><span class="s4">= </span><span class="s1">c_uint32</span>
+<span class="s1">SSLConnectionType </span><span class="s4">= </span><span class="s1">c_uint32</span>
+<span class="s1">SSLSessionOption </span><span class="s4">= </span><span class="s1">c_uint32</span>
+
+
+<span class="s3">try</span><span class="s4">:</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecItemImport</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span>
+        <span class="s1">CFDataRef</span><span class="s4">,</span>
+        <span class="s1">CFStringRef</span><span class="s4">,</span>
+        <span class="s1">POINTER</span><span class="s4">(</span><span class="s1">SecExternalFormat</span><span class="s4">),</span>
+        <span class="s1">POINTER</span><span class="s4">(</span><span class="s1">SecExternalItemType</span><span class="s4">),</span>
+        <span class="s1">SecItemImportExportFlags</span><span class="s4">,</span>
+        <span class="s1">POINTER</span><span class="s4">(</span><span class="s1">SecItemImportExportKeyParameters</span><span class="s4">),</span>
+        <span class="s1">SecKeychainRef</span><span class="s4">,</span>
+        <span class="s1">POINTER</span><span class="s4">(</span><span class="s1">CFArrayRef</span><span class="s4">),</span>
+    <span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecItemImport</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecCertificateGetTypeID</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= []</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecCertificateGetTypeID</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">CFTypeID</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecIdentityGetTypeID</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= []</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecIdentityGetTypeID</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">CFTypeID</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecKeyGetTypeID</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= []</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecKeyGetTypeID</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">CFTypeID</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecCertificateCreateWithData</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">CFAllocatorRef</span><span class="s4">, </span><span class="s1">CFDataRef</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecCertificateCreateWithData</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">SecCertificateRef</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecCertificateCopyData</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SecCertificateRef</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecCertificateCopyData</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">CFDataRef</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecCopyErrorMessageString</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">OSStatus</span><span class="s4">, </span><span class="s1">c_void_p</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecCopyErrorMessageString</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">CFStringRef</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecIdentityCreateWithCertificate</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span>
+        <span class="s1">CFTypeRef</span><span class="s4">,</span>
+        <span class="s1">SecCertificateRef</span><span class="s4">,</span>
+        <span class="s1">POINTER</span><span class="s4">(</span><span class="s1">SecIdentityRef</span><span class="s4">),</span>
+    <span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecIdentityCreateWithCertificate</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecKeychainCreate</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span>
+        <span class="s1">c_char_p</span><span class="s4">,</span>
+        <span class="s1">c_uint32</span><span class="s4">,</span>
+        <span class="s1">c_void_p</span><span class="s4">,</span>
+        <span class="s1">Boolean</span><span class="s4">,</span>
+        <span class="s1">c_void_p</span><span class="s4">,</span>
+        <span class="s1">POINTER</span><span class="s4">(</span><span class="s1">SecKeychainRef</span><span class="s4">),</span>
+    <span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecKeychainCreate</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecKeychainDelete</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SecKeychainRef</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecKeychainDelete</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecPKCS12Import</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span>
+        <span class="s1">CFDataRef</span><span class="s4">,</span>
+        <span class="s1">CFDictionaryRef</span><span class="s4">,</span>
+        <span class="s1">POINTER</span><span class="s4">(</span><span class="s1">CFArrayRef</span><span class="s4">),</span>
+    <span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecPKCS12Import</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">SSLReadFunc </span><span class="s4">= </span><span class="s1">CFUNCTYPE</span><span class="s4">(</span><span class="s1">OSStatus</span><span class="s4">, </span><span class="s1">SSLConnectionRef</span><span class="s4">, </span><span class="s1">c_void_p</span><span class="s4">, </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">c_size_t</span><span class="s4">))</span>
+    <span class="s1">SSLWriteFunc </span><span class="s4">= </span><span class="s1">CFUNCTYPE</span><span class="s4">(</span>
+        <span class="s1">OSStatus</span><span class="s4">, </span><span class="s1">SSLConnectionRef</span><span class="s4">, </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">c_byte</span><span class="s4">), </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">c_size_t</span><span class="s4">)</span>
+    <span class="s4">)</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetIOFuncs</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SSLContextRef</span><span class="s4">, </span><span class="s1">SSLReadFunc</span><span class="s4">, </span><span class="s1">SSLWriteFunc</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetIOFuncs</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetPeerID</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SSLContextRef</span><span class="s4">, </span><span class="s1">c_char_p</span><span class="s4">, </span><span class="s1">c_size_t</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetPeerID</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetCertificate</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SSLContextRef</span><span class="s4">, </span><span class="s1">CFArrayRef</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetCertificate</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetCertificateAuthorities</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SSLContextRef</span><span class="s4">, </span><span class="s1">CFTypeRef</span><span class="s4">, </span><span class="s1">Boolean</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetCertificateAuthorities</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetConnection</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SSLContextRef</span><span class="s4">, </span><span class="s1">SSLConnectionRef</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetConnection</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetPeerDomainName</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SSLContextRef</span><span class="s4">, </span><span class="s1">c_char_p</span><span class="s4">, </span><span class="s1">c_size_t</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetPeerDomainName</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLHandshake</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SSLContextRef</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLHandshake</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLRead</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SSLContextRef</span><span class="s4">, </span><span class="s1">c_char_p</span><span class="s4">, </span><span class="s1">c_size_t</span><span class="s4">, </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">c_size_t</span><span class="s4">)]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLRead</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLWrite</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SSLContextRef</span><span class="s4">, </span><span class="s1">c_char_p</span><span class="s4">, </span><span class="s1">c_size_t</span><span class="s4">, </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">c_size_t</span><span class="s4">)]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLWrite</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLClose</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SSLContextRef</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLClose</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLGetNumberSupportedCiphers</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SSLContextRef</span><span class="s4">, </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">c_size_t</span><span class="s4">)]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLGetNumberSupportedCiphers</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLGetSupportedCiphers</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span>
+        <span class="s1">SSLContextRef</span><span class="s4">,</span>
+        <span class="s1">POINTER</span><span class="s4">(</span><span class="s1">SSLCipherSuite</span><span class="s4">),</span>
+        <span class="s1">POINTER</span><span class="s4">(</span><span class="s1">c_size_t</span><span class="s4">),</span>
+    <span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLGetSupportedCiphers</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetEnabledCiphers</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span>
+        <span class="s1">SSLContextRef</span><span class="s4">,</span>
+        <span class="s1">POINTER</span><span class="s4">(</span><span class="s1">SSLCipherSuite</span><span class="s4">),</span>
+        <span class="s1">c_size_t</span><span class="s4">,</span>
+    <span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetEnabledCiphers</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLGetNumberEnabledCiphers</span><span class="s4">.</span><span class="s1">argtype </span><span class="s4">= [</span><span class="s1">SSLContextRef</span><span class="s4">, </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">c_size_t</span><span class="s4">)]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLGetNumberEnabledCiphers</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLGetEnabledCiphers</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span>
+        <span class="s1">SSLContextRef</span><span class="s4">,</span>
+        <span class="s1">POINTER</span><span class="s4">(</span><span class="s1">SSLCipherSuite</span><span class="s4">),</span>
+        <span class="s1">POINTER</span><span class="s4">(</span><span class="s1">c_size_t</span><span class="s4">),</span>
+    <span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLGetEnabledCiphers</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLGetNegotiatedCipher</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SSLContextRef</span><span class="s4">, </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">SSLCipherSuite</span><span class="s4">)]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLGetNegotiatedCipher</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLGetNegotiatedProtocolVersion</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span>
+        <span class="s1">SSLContextRef</span><span class="s4">,</span>
+        <span class="s1">POINTER</span><span class="s4">(</span><span class="s1">SSLProtocol</span><span class="s4">),</span>
+    <span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLGetNegotiatedProtocolVersion</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLCopyPeerTrust</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SSLContextRef</span><span class="s4">, </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">SecTrustRef</span><span class="s4">)]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLCopyPeerTrust</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecTrustSetAnchorCertificates</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SecTrustRef</span><span class="s4">, </span><span class="s1">CFArrayRef</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecTrustSetAnchorCertificates</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecTrustSetAnchorCertificatesOnly</span><span class="s4">.</span><span class="s1">argstypes </span><span class="s4">= [</span><span class="s1">SecTrustRef</span><span class="s4">, </span><span class="s1">Boolean</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecTrustSetAnchorCertificatesOnly</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecTrustEvaluate</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SecTrustRef</span><span class="s4">, </span><span class="s1">POINTER</span><span class="s4">(</span><span class="s1">SecTrustResultType</span><span class="s4">)]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecTrustEvaluate</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecTrustGetCertificateCount</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SecTrustRef</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecTrustGetCertificateCount</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">CFIndex</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecTrustGetCertificateAtIndex</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SecTrustRef</span><span class="s4">, </span><span class="s1">CFIndex</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecTrustGetCertificateAtIndex</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">SecCertificateRef</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLCreateContext</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span>
+        <span class="s1">CFAllocatorRef</span><span class="s4">,</span>
+        <span class="s1">SSLProtocolSide</span><span class="s4">,</span>
+        <span class="s1">SSLConnectionType</span><span class="s4">,</span>
+    <span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLCreateContext</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">SSLContextRef</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetSessionOption</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SSLContextRef</span><span class="s4">, </span><span class="s1">SSLSessionOption</span><span class="s4">, </span><span class="s1">Boolean</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetSessionOption</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetProtocolVersionMin</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SSLContextRef</span><span class="s4">, </span><span class="s1">SSLProtocol</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetProtocolVersionMin</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetProtocolVersionMax</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SSLContextRef</span><span class="s4">, </span><span class="s1">SSLProtocol</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetProtocolVersionMax</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s3">try</span><span class="s4">:</span>
+        <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetALPNProtocols</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">SSLContextRef</span><span class="s4">, </span><span class="s1">CFArrayRef</span><span class="s4">]</span>
+        <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLSetALPNProtocols</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">OSStatus</span>
+    <span class="s3">except </span><span class="s1">AttributeError</span><span class="s4">:</span>
+        <span class="s0"># Supported only in 10.12+</span>
+        <span class="s3">pass</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecCopyErrorMessageString</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">OSStatus</span><span class="s4">, </span><span class="s1">c_void_p</span><span class="s4">]</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecCopyErrorMessageString</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">CFStringRef</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLReadFunc </span><span class="s4">= </span><span class="s1">SSLReadFunc</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLWriteFunc </span><span class="s4">= </span><span class="s1">SSLWriteFunc</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLContextRef </span><span class="s4">= </span><span class="s1">SSLContextRef</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLProtocol </span><span class="s4">= </span><span class="s1">SSLProtocol</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SSLCipherSuite </span><span class="s4">= </span><span class="s1">SSLCipherSuite</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecIdentityRef </span><span class="s4">= </span><span class="s1">SecIdentityRef</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecKeychainRef </span><span class="s4">= </span><span class="s1">SecKeychainRef</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecTrustRef </span><span class="s4">= </span><span class="s1">SecTrustRef</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecTrustResultType </span><span class="s4">= </span><span class="s1">SecTrustResultType</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">SecExternalFormat </span><span class="s4">= </span><span class="s1">SecExternalFormat</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">OSStatus </span><span class="s4">= </span><span class="s1">OSStatus</span>
+
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">kSecImportExportPassphrase </span><span class="s4">= </span><span class="s1">CFStringRef</span><span class="s4">.</span><span class="s1">in_dll</span><span class="s4">(</span>
+        <span class="s1">Security</span><span class="s4">, </span><span class="s5">&quot;kSecImportExportPassphrase&quot;</span>
+    <span class="s4">)</span>
+    <span class="s1">Security</span><span class="s4">.</span><span class="s1">kSecImportItemIdentity </span><span class="s4">= </span><span class="s1">CFStringRef</span><span class="s4">.</span><span class="s1">in_dll</span><span class="s4">(</span>
+        <span class="s1">Security</span><span class="s4">, </span><span class="s5">&quot;kSecImportItemIdentity&quot;</span>
+    <span class="s4">)</span>
+
+    <span class="s0"># CoreFoundation time!</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFRetain</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">CFTypeRef</span><span class="s4">]</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFRetain</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">CFTypeRef</span>
+
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFRelease</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">CFTypeRef</span><span class="s4">]</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFRelease</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s3">None</span>
+
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFGetTypeID</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">CFTypeRef</span><span class="s4">]</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFGetTypeID</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">CFTypeID</span>
+
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFStringCreateWithCString</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span>
+        <span class="s1">CFAllocatorRef</span><span class="s4">,</span>
+        <span class="s1">c_char_p</span><span class="s4">,</span>
+        <span class="s1">CFStringEncoding</span><span class="s4">,</span>
+    <span class="s4">]</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFStringCreateWithCString</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">CFStringRef</span>
+
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFStringGetCStringPtr</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">CFStringRef</span><span class="s4">, </span><span class="s1">CFStringEncoding</span><span class="s4">]</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFStringGetCStringPtr</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">c_char_p</span>
+
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFStringGetCString</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span>
+        <span class="s1">CFStringRef</span><span class="s4">,</span>
+        <span class="s1">c_char_p</span><span class="s4">,</span>
+        <span class="s1">CFIndex</span><span class="s4">,</span>
+        <span class="s1">CFStringEncoding</span><span class="s4">,</span>
+    <span class="s4">]</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFStringGetCString</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">c_bool</span>
+
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFDataCreate</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">CFAllocatorRef</span><span class="s4">, </span><span class="s1">c_char_p</span><span class="s4">, </span><span class="s1">CFIndex</span><span class="s4">]</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFDataCreate</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">CFDataRef</span>
+
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFDataGetLength</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">CFDataRef</span><span class="s4">]</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFDataGetLength</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">CFIndex</span>
+
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFDataGetBytePtr</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">CFDataRef</span><span class="s4">]</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFDataGetBytePtr</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">c_void_p</span>
+
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFDictionaryCreate</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span>
+        <span class="s1">CFAllocatorRef</span><span class="s4">,</span>
+        <span class="s1">POINTER</span><span class="s4">(</span><span class="s1">CFTypeRef</span><span class="s4">),</span>
+        <span class="s1">POINTER</span><span class="s4">(</span><span class="s1">CFTypeRef</span><span class="s4">),</span>
+        <span class="s1">CFIndex</span><span class="s4">,</span>
+        <span class="s1">CFDictionaryKeyCallBacks</span><span class="s4">,</span>
+        <span class="s1">CFDictionaryValueCallBacks</span><span class="s4">,</span>
+    <span class="s4">]</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFDictionaryCreate</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">CFDictionaryRef</span>
+
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFDictionaryGetValue</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">CFDictionaryRef</span><span class="s4">, </span><span class="s1">CFTypeRef</span><span class="s4">]</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFDictionaryGetValue</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">CFTypeRef</span>
+
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFArrayCreate</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span>
+        <span class="s1">CFAllocatorRef</span><span class="s4">,</span>
+        <span class="s1">POINTER</span><span class="s4">(</span><span class="s1">CFTypeRef</span><span class="s4">),</span>
+        <span class="s1">CFIndex</span><span class="s4">,</span>
+        <span class="s1">CFArrayCallBacks</span><span class="s4">,</span>
+    <span class="s4">]</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFArrayCreate</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">CFArrayRef</span>
+
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFArrayCreateMutable</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span>
+        <span class="s1">CFAllocatorRef</span><span class="s4">,</span>
+        <span class="s1">CFIndex</span><span class="s4">,</span>
+        <span class="s1">CFArrayCallBacks</span><span class="s4">,</span>
+    <span class="s4">]</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFArrayCreateMutable</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">CFMutableArrayRef</span>
+
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFArrayAppendValue</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">CFMutableArrayRef</span><span class="s4">, </span><span class="s1">c_void_p</span><span class="s4">]</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFArrayAppendValue</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s3">None</span>
+
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFArrayGetCount</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">CFArrayRef</span><span class="s4">]</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFArrayGetCount</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">CFIndex</span>
+
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFArrayGetValueAtIndex</span><span class="s4">.</span><span class="s1">argtypes </span><span class="s4">= [</span><span class="s1">CFArrayRef</span><span class="s4">, </span><span class="s1">CFIndex</span><span class="s4">]</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFArrayGetValueAtIndex</span><span class="s4">.</span><span class="s1">restype </span><span class="s4">= </span><span class="s1">c_void_p</span>
+
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">kCFAllocatorDefault </span><span class="s4">= </span><span class="s1">CFAllocatorRef</span><span class="s4">.</span><span class="s1">in_dll</span><span class="s4">(</span>
+        <span class="s1">CoreFoundation</span><span class="s4">, </span><span class="s5">&quot;kCFAllocatorDefault&quot;</span>
+    <span class="s4">)</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">kCFTypeArrayCallBacks </span><span class="s4">= </span><span class="s1">c_void_p</span><span class="s4">.</span><span class="s1">in_dll</span><span class="s4">(</span>
+        <span class="s1">CoreFoundation</span><span class="s4">, </span><span class="s5">&quot;kCFTypeArrayCallBacks&quot;</span>
+    <span class="s4">)</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">kCFTypeDictionaryKeyCallBacks </span><span class="s4">= </span><span class="s1">c_void_p</span><span class="s4">.</span><span class="s1">in_dll</span><span class="s4">(</span>
+        <span class="s1">CoreFoundation</span><span class="s4">, </span><span class="s5">&quot;kCFTypeDictionaryKeyCallBacks&quot;</span>
+    <span class="s4">)</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">kCFTypeDictionaryValueCallBacks </span><span class="s4">= </span><span class="s1">c_void_p</span><span class="s4">.</span><span class="s1">in_dll</span><span class="s4">(</span>
+        <span class="s1">CoreFoundation</span><span class="s4">, </span><span class="s5">&quot;kCFTypeDictionaryValueCallBacks&quot;</span>
+    <span class="s4">)</span>
+
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFTypeRef </span><span class="s4">= </span><span class="s1">CFTypeRef</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFArrayRef </span><span class="s4">= </span><span class="s1">CFArrayRef</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFStringRef </span><span class="s4">= </span><span class="s1">CFStringRef</span>
+    <span class="s1">CoreFoundation</span><span class="s4">.</span><span class="s1">CFDictionaryRef </span><span class="s4">= </span><span class="s1">CFDictionaryRef</span>
+
+<span class="s3">except </span><span class="s1">AttributeError</span><span class="s4">:</span>
+    <span class="s3">raise </span><span class="s1">ImportError</span><span class="s4">(</span><span class="s5">&quot;Error initializing ctypes&quot;</span><span class="s4">) </span><span class="s3">from None</span>
+
+
+<span class="s3">class </span><span class="s1">CFConst</span><span class="s4">:</span>
+    <span class="s2">&quot;&quot;&quot; 
+    A class object that acts as essentially a namespace for CoreFoundation 
+    constants. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">kCFStringEncodingUTF8 </span><span class="s4">= </span><span class="s1">CFStringEncoding</span><span class="s4">(</span><span class="s6">0x08000100</span><span class="s4">)</span>
+</pre>
+</body>
+</html>

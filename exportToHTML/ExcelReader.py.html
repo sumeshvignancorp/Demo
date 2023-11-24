@@ -1,0 +1,38 @@
+<html>
+<head>
+<title>ExcelReader.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #2aacb8;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+ExcelReader.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">openpyxl</span>
+
+
+<span class="s0">def </span><span class="s1">get_data_from_excel</span><span class="s2">(</span><span class="s1">path</span><span class="s2">, </span><span class="s1">sheet_name</span><span class="s2">):</span>
+
+    <span class="s1">final_list </span><span class="s2">= []</span>
+    <span class="s1">workbook </span><span class="s2">= </span><span class="s1">openpyxl</span><span class="s2">.</span><span class="s1">load_workbook</span><span class="s2">(</span><span class="s1">path</span><span class="s2">)</span>
+    <span class="s1">sheet </span><span class="s2">= </span><span class="s1">workbook</span><span class="s2">[</span><span class="s1">sheet_name</span><span class="s2">]</span>
+    <span class="s1">total_rows </span><span class="s2">= </span><span class="s1">sheet</span><span class="s2">.</span><span class="s1">max_row</span>
+    <span class="s1">total_cols </span><span class="s2">= </span><span class="s1">sheet</span><span class="s2">.</span><span class="s1">max_column</span>
+
+    <span class="s0">for </span><span class="s1">r </span><span class="s0">in </span><span class="s1">range</span><span class="s2">(</span><span class="s3">2</span><span class="s2">, </span><span class="s1">total_rows</span><span class="s2">+</span><span class="s3">1</span><span class="s2">):</span>
+        <span class="s1">row_list </span><span class="s2">= []</span>
+        <span class="s0">for </span><span class="s1">c </span><span class="s0">in </span><span class="s1">range</span><span class="s2">(</span><span class="s3">1</span><span class="s2">, </span><span class="s1">total_cols</span><span class="s2">+</span><span class="s3">1</span><span class="s2">):</span>
+            <span class="s1">row_list</span><span class="s2">.</span><span class="s1">append</span><span class="s2">(</span><span class="s1">sheet</span><span class="s2">.</span><span class="s1">cell</span><span class="s2">(</span><span class="s1">row</span><span class="s2">=</span><span class="s1">r</span><span class="s2">, </span><span class="s1">column</span><span class="s2">=</span><span class="s1">c</span><span class="s2">).</span><span class="s1">value</span><span class="s2">)</span>
+        <span class="s1">final_list</span><span class="s2">.</span><span class="s1">append</span><span class="s2">(</span><span class="s1">row_list</span><span class="s2">)</span>
+
+    <span class="s0">return </span><span class="s1">final_list</span>
+</pre>
+</body>
+</html>

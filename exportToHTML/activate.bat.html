@@ -1,0 +1,60 @@
+<html>
+<head>
+<title>activate.bat</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #bcbec4;}
+.s1 { color: #cf8e6d;}
+.s2 { color: #bcbec4;}
+.s3 { color: #6aab73;}
+.s4 { color: #cf8e6d; font-style: italic;}
+.s5 { color: #6aab73; font-style: italic;}
+.s6 { color: #7a7e85;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+activate.bat</font>
+</center></td></tr></table>
+<pre><span class="s0">@</span><span class="s1">set </span><span class="s3">&quot;VIRTUAL_ENV=C:\Users\abinaya\PycharmProjects\Demo\venv&quot;</span>
+
+<span class="s0">@</span><span class="s2">if defined _OLD_VIRTUAL_PROMPT </span><span class="s0">(</span>
+    <span class="s0">@</span><span class="s1">set </span><span class="s3">&quot;PROMPT=%_OLD_VIRTUAL_PROMPT%&quot;</span>
+<span class="s0">) </span><span class="s1">else </span><span class="s0">(</span>
+    <span class="s0">@</span><span class="s2">if </span><span class="s0">not </span><span class="s2">defined </span><span class="s1">PROMPT </span><span class="s0">(</span>
+        <span class="s0">@</span><span class="s1">set </span><span class="s3">&quot;PROMPT=$P$G&quot;</span>
+    <span class="s0">)</span>
+    <span class="s0">@</span><span class="s2">if </span><span class="s0">not </span><span class="s2">defined VIRTUAL_ENV_DISABLE_PROMPT </span><span class="s0">(</span>
+        <span class="s0">@</span><span class="s1">set </span><span class="s3">&quot;_OLD_VIRTUAL_PROMPT=%PROMPT%&quot;</span>
+    <span class="s0">)</span>
+<span class="s0">)</span>
+<span class="s0">@</span><span class="s2">if </span><span class="s0">not </span><span class="s2">defined VIRTUAL_ENV_DISABLE_PROMPT </span><span class="s0">(</span>
+    <span class="s0">@</span><span class="s2">if </span><span class="s3">&quot;&quot; </span><span class="s0">NEQ </span><span class="s3">&quot;&quot; </span><span class="s0">(</span>
+        <span class="s0">@</span><span class="s1">set </span><span class="s3">&quot;PROMPT=() %PROMPT%&quot;</span>
+    <span class="s0">) </span><span class="s1">else </span><span class="s0">(</span>
+        <span class="s0">@</span><span class="s2">for </span><span class="s4">%%</span><span class="s2">d in </span><span class="s0">(</span><span class="s3">&quot;%VIRTUAL_ENV%&quot;</span><span class="s0">) </span><span class="s2">do </span><span class="s0">@</span><span class="s1">set </span><span class="s3">&quot;PROMPT=(</span><span class="s5">%%</span><span class="s3">~nxd) %PROMPT%&quot;</span>
+    <span class="s0">)</span>
+<span class="s0">)</span>
+
+<span class="s0">@</span><span class="s6">REM Don't use () to avoid problems with them in %PATH%</span>
+<span class="s0">@</span><span class="s2">if defined _OLD_VIRTUAL_PYTHONHOME </span><span class="s0">@</span><span class="s2">goto ENDIFVHOME 
+    </span><span class="s0">@</span><span class="s1">set </span><span class="s3">&quot;_OLD_VIRTUAL_PYTHONHOME=%PYTHONHOME%&quot;</span>
+<span class="s0">:</span><span class="s1">ENDIFVHOME</span>
+
+<span class="s0">@</span><span class="s1">set </span><span class="s0">PYTHONHOME=</span>
+
+<span class="s0">@</span><span class="s6">REM if defined _OLD_VIRTUAL_PATH (</span>
+<span class="s0">@</span><span class="s2">if </span><span class="s0">not </span><span class="s2">defined _OLD_VIRTUAL_PATH </span><span class="s0">@</span><span class="s2">goto ENDIFVPATH1 
+    </span><span class="s0">@</span><span class="s1">set </span><span class="s3">&quot;PATH=%_OLD_VIRTUAL_PATH%&quot;</span>
+<span class="s0">:</span><span class="s1">ENDIFVPATH1</span>
+<span class="s0">@</span><span class="s6">REM ) else (</span>
+<span class="s0">@</span><span class="s2">if defined _OLD_VIRTUAL_PATH </span><span class="s0">@</span><span class="s2">goto ENDIFVPATH2 
+    </span><span class="s0">@</span><span class="s1">set </span><span class="s3">&quot;_OLD_VIRTUAL_PATH=%PATH%&quot;</span>
+<span class="s0">:</span><span class="s1">ENDIFVPATH2</span>
+
+<span class="s0">@</span><span class="s1">set </span><span class="s3">&quot;PATH=%VIRTUAL_ENV%\Scripts;%PATH%&quot;</span>
+</pre>
+</body>
+</html>

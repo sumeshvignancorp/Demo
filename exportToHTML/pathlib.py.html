@@ -1,0 +1,826 @@
+<html>
+<head>
+<title>pathlib.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #2aacb8;}
+.s4 { color: #6aab73;}
+.s5 { color: #7a7e85;}
+.s6 { color: #5f826b; font-style: italic;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+pathlib.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">atexit</span>
+<span class="s0">import </span><span class="s1">contextlib</span>
+<span class="s0">import </span><span class="s1">fnmatch</span>
+<span class="s0">import </span><span class="s1">importlib</span><span class="s2">.</span><span class="s1">util</span>
+<span class="s0">import </span><span class="s1">itertools</span>
+<span class="s0">import </span><span class="s1">os</span>
+<span class="s0">import </span><span class="s1">shutil</span>
+<span class="s0">import </span><span class="s1">sys</span>
+<span class="s0">import </span><span class="s1">types</span>
+<span class="s0">import </span><span class="s1">uuid</span>
+<span class="s0">import </span><span class="s1">warnings</span>
+<span class="s0">from </span><span class="s1">enum </span><span class="s0">import </span><span class="s1">Enum</span>
+<span class="s0">from </span><span class="s1">errno </span><span class="s0">import </span><span class="s1">EBADF</span>
+<span class="s0">from </span><span class="s1">errno </span><span class="s0">import </span><span class="s1">ELOOP</span>
+<span class="s0">from </span><span class="s1">errno </span><span class="s0">import </span><span class="s1">ENOENT</span>
+<span class="s0">from </span><span class="s1">errno </span><span class="s0">import </span><span class="s1">ENOTDIR</span>
+<span class="s0">from </span><span class="s1">functools </span><span class="s0">import </span><span class="s1">partial</span>
+<span class="s0">from </span><span class="s1">os</span><span class="s2">.</span><span class="s1">path </span><span class="s0">import </span><span class="s1">expanduser</span>
+<span class="s0">from </span><span class="s1">os</span><span class="s2">.</span><span class="s1">path </span><span class="s0">import </span><span class="s1">expandvars</span>
+<span class="s0">from </span><span class="s1">os</span><span class="s2">.</span><span class="s1">path </span><span class="s0">import </span><span class="s1">isabs</span>
+<span class="s0">from </span><span class="s1">os</span><span class="s2">.</span><span class="s1">path </span><span class="s0">import </span><span class="s1">sep</span>
+<span class="s0">from </span><span class="s1">pathlib </span><span class="s0">import </span><span class="s1">Path</span>
+<span class="s0">from </span><span class="s1">pathlib </span><span class="s0">import </span><span class="s1">PurePath</span>
+<span class="s0">from </span><span class="s1">posixpath </span><span class="s0">import </span><span class="s1">sep </span><span class="s0">as </span><span class="s1">posix_sep</span>
+<span class="s0">from </span><span class="s1">types </span><span class="s0">import </span><span class="s1">ModuleType</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Callable</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Dict</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Iterable</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Iterator</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">List</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Optional</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Set</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Tuple</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Type</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">TypeVar</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Union</span>
+
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">compat </span><span class="s0">import </span><span class="s1">assert_never</span>
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">outcomes </span><span class="s0">import </span><span class="s1">skip</span>
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">warning_types </span><span class="s0">import </span><span class="s1">PytestWarning</span>
+
+<span class="s1">LOCK_TIMEOUT </span><span class="s2">= </span><span class="s3">60 </span><span class="s2">* </span><span class="s3">60 </span><span class="s2">* </span><span class="s3">24 </span><span class="s2">* </span><span class="s3">3</span>
+
+
+<span class="s1">_AnyPurePath </span><span class="s2">= </span><span class="s1">TypeVar</span><span class="s2">(</span><span class="s4">&quot;_AnyPurePath&quot;</span><span class="s2">, </span><span class="s1">bound</span><span class="s2">=</span><span class="s1">PurePath</span><span class="s2">)</span>
+
+<span class="s5"># The following function, variables and comments were</span>
+<span class="s5"># copied from cpython 3.9 Lib/pathlib.py file.</span>
+
+<span class="s5"># EBADF - guard against macOS `stat` throwing EBADF</span>
+<span class="s1">_IGNORED_ERRORS </span><span class="s2">= (</span><span class="s1">ENOENT</span><span class="s2">, </span><span class="s1">ENOTDIR</span><span class="s2">, </span><span class="s1">EBADF</span><span class="s2">, </span><span class="s1">ELOOP</span><span class="s2">)</span>
+
+<span class="s1">_IGNORED_WINERRORS </span><span class="s2">= (</span>
+    <span class="s3">21</span><span class="s2">,  </span><span class="s5"># ERROR_NOT_READY - drive exists but is not accessible</span>
+    <span class="s3">1921</span><span class="s2">,  </span><span class="s5"># ERROR_CANT_RESOLVE_FILENAME - fix for broken symlink pointing to itself</span>
+<span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">_ignore_error</span><span class="s2">(</span><span class="s1">exception</span><span class="s2">):</span>
+    <span class="s0">return </span><span class="s2">(</span>
+        <span class="s1">getattr</span><span class="s2">(</span><span class="s1">exception</span><span class="s2">, </span><span class="s4">&quot;errno&quot;</span><span class="s2">, </span><span class="s0">None</span><span class="s2">) </span><span class="s0">in </span><span class="s1">_IGNORED_ERRORS</span>
+        <span class="s0">or </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">exception</span><span class="s2">, </span><span class="s4">&quot;winerror&quot;</span><span class="s2">, </span><span class="s0">None</span><span class="s2">) </span><span class="s0">in </span><span class="s1">_IGNORED_WINERRORS</span>
+    <span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">get_lock_path</span><span class="s2">(</span><span class="s1">path</span><span class="s2">: </span><span class="s1">_AnyPurePath</span><span class="s2">) </span><span class="s1">-&gt; _AnyPurePath</span><span class="s2">:</span>
+    <span class="s0">return </span><span class="s1">path</span><span class="s2">.</span><span class="s1">joinpath</span><span class="s2">(</span><span class="s4">&quot;.lock&quot;</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">on_rm_rf_error</span><span class="s2">(</span>
+    <span class="s1">func</span><span class="s2">,</span>
+    <span class="s1">path</span><span class="s2">: </span><span class="s1">str</span><span class="s2">,</span>
+    <span class="s1">excinfo</span><span class="s2">: </span><span class="s1">Union</span><span class="s2">[</span>
+        <span class="s1">BaseException</span><span class="s2">,</span>
+        <span class="s1">Tuple</span><span class="s2">[</span><span class="s1">Type</span><span class="s2">[</span><span class="s1">BaseException</span><span class="s2">], </span><span class="s1">BaseException</span><span class="s2">, </span><span class="s1">Optional</span><span class="s2">[</span><span class="s1">types</span><span class="s2">.</span><span class="s1">TracebackType</span><span class="s2">]],</span>
+    <span class="s2">],</span>
+    <span class="s2">*,</span>
+    <span class="s1">start_path</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">,</span>
+<span class="s2">) </span><span class="s1">-&gt; bool</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;Handle known read-only errors during rmtree. 
+ 
+    The returned value is used only by our own tests. 
+    &quot;&quot;&quot;</span>
+    <span class="s0">if </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">excinfo</span><span class="s2">, </span><span class="s1">BaseException</span><span class="s2">):</span>
+        <span class="s1">exc </span><span class="s2">= </span><span class="s1">excinfo</span>
+    <span class="s0">else</span><span class="s2">:</span>
+        <span class="s1">exc </span><span class="s2">= </span><span class="s1">excinfo</span><span class="s2">[</span><span class="s3">1</span><span class="s2">]</span>
+
+    <span class="s5"># Another process removed the file in the middle of the &quot;rm_rf&quot; (xdist for example).</span>
+    <span class="s5"># More context: https://github.com/pytest-dev/pytest/issues/5974#issuecomment-543799018</span>
+    <span class="s0">if </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">exc</span><span class="s2">, </span><span class="s1">FileNotFoundError</span><span class="s2">):</span>
+        <span class="s0">return False</span>
+
+    <span class="s0">if not </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">exc</span><span class="s2">, </span><span class="s1">PermissionError</span><span class="s2">):</span>
+        <span class="s1">warnings</span><span class="s2">.</span><span class="s1">warn</span><span class="s2">(</span>
+            <span class="s1">PytestWarning</span><span class="s2">(</span><span class="s4">f&quot;(rm_rf) error removing </span><span class="s0">{</span><span class="s1">path</span><span class="s0">}\n{</span><span class="s1">type</span><span class="s2">(</span><span class="s1">exc</span><span class="s2">)</span><span class="s0">}</span><span class="s4">: </span><span class="s0">{</span><span class="s1">exc</span><span class="s0">}</span><span class="s4">&quot;</span><span class="s2">)</span>
+        <span class="s2">)</span>
+        <span class="s0">return False</span>
+
+    <span class="s0">if </span><span class="s1">func </span><span class="s0">not in </span><span class="s2">(</span><span class="s1">os</span><span class="s2">.</span><span class="s1">rmdir</span><span class="s2">, </span><span class="s1">os</span><span class="s2">.</span><span class="s1">remove</span><span class="s2">, </span><span class="s1">os</span><span class="s2">.</span><span class="s1">unlink</span><span class="s2">):</span>
+        <span class="s0">if </span><span class="s1">func </span><span class="s0">not in </span><span class="s2">(</span><span class="s1">os</span><span class="s2">.</span><span class="s1">open</span><span class="s2">,):</span>
+            <span class="s1">warnings</span><span class="s2">.</span><span class="s1">warn</span><span class="s2">(</span>
+                <span class="s1">PytestWarning</span><span class="s2">(</span>
+                    <span class="s4">&quot;(rm_rf) unknown function {} when removing {}:</span><span class="s0">\n</span><span class="s4">{}: {}&quot;</span><span class="s2">.</span><span class="s1">format</span><span class="s2">(</span>
+                        <span class="s1">func</span><span class="s2">, </span><span class="s1">path</span><span class="s2">, </span><span class="s1">type</span><span class="s2">(</span><span class="s1">exc</span><span class="s2">), </span><span class="s1">exc</span>
+                    <span class="s2">)</span>
+                <span class="s2">)</span>
+            <span class="s2">)</span>
+        <span class="s0">return False</span>
+
+    <span class="s5"># Chmod + retry.</span>
+    <span class="s0">import </span><span class="s1">stat</span>
+
+    <span class="s0">def </span><span class="s1">chmod_rw</span><span class="s2">(</span><span class="s1">p</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s1">mode </span><span class="s2">= </span><span class="s1">os</span><span class="s2">.</span><span class="s1">stat</span><span class="s2">(</span><span class="s1">p</span><span class="s2">).</span><span class="s1">st_mode</span>
+        <span class="s1">os</span><span class="s2">.</span><span class="s1">chmod</span><span class="s2">(</span><span class="s1">p</span><span class="s2">, </span><span class="s1">mode </span><span class="s2">| </span><span class="s1">stat</span><span class="s2">.</span><span class="s1">S_IRUSR </span><span class="s2">| </span><span class="s1">stat</span><span class="s2">.</span><span class="s1">S_IWUSR</span><span class="s2">)</span>
+
+    <span class="s5"># For files, we need to recursively go upwards in the directories to</span>
+    <span class="s5"># ensure they all are also writable.</span>
+    <span class="s1">p </span><span class="s2">= </span><span class="s1">Path</span><span class="s2">(</span><span class="s1">path</span><span class="s2">)</span>
+    <span class="s0">if </span><span class="s1">p</span><span class="s2">.</span><span class="s1">is_file</span><span class="s2">():</span>
+        <span class="s0">for </span><span class="s1">parent </span><span class="s0">in </span><span class="s1">p</span><span class="s2">.</span><span class="s1">parents</span><span class="s2">:</span>
+            <span class="s1">chmod_rw</span><span class="s2">(</span><span class="s1">str</span><span class="s2">(</span><span class="s1">parent</span><span class="s2">))</span>
+            <span class="s5"># Stop when we reach the original path passed to rm_rf.</span>
+            <span class="s0">if </span><span class="s1">parent </span><span class="s2">== </span><span class="s1">start_path</span><span class="s2">:</span>
+                <span class="s0">break</span>
+    <span class="s1">chmod_rw</span><span class="s2">(</span><span class="s1">str</span><span class="s2">(</span><span class="s1">path</span><span class="s2">))</span>
+
+    <span class="s1">func</span><span class="s2">(</span><span class="s1">path</span><span class="s2">)</span>
+    <span class="s0">return True</span>
+
+
+<span class="s0">def </span><span class="s1">ensure_extended_length_path</span><span class="s2">(</span><span class="s1">path</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">) </span><span class="s1">-&gt; Path</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;Get the extended-length version of a path (Windows). 
+ 
+    On Windows, by default, the maximum length of a path (MAX_PATH) is 260 
+    characters, and operations on paths longer than that fail. But it is possible 
+    to overcome this by converting the path to &quot;extended-length&quot; form before 
+    performing the operation: 
+    https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file#maximum-path-length-limitation 
+ 
+    On Windows, this function returns the extended-length absolute version of path. 
+    On other platforms it returns path unchanged. 
+    &quot;&quot;&quot;</span>
+    <span class="s0">if </span><span class="s1">sys</span><span class="s2">.</span><span class="s1">platform</span><span class="s2">.</span><span class="s1">startswith</span><span class="s2">(</span><span class="s4">&quot;win32&quot;</span><span class="s2">):</span>
+        <span class="s1">path </span><span class="s2">= </span><span class="s1">path</span><span class="s2">.</span><span class="s1">resolve</span><span class="s2">()</span>
+        <span class="s1">path </span><span class="s2">= </span><span class="s1">Path</span><span class="s2">(</span><span class="s1">get_extended_length_path_str</span><span class="s2">(</span><span class="s1">str</span><span class="s2">(</span><span class="s1">path</span><span class="s2">)))</span>
+    <span class="s0">return </span><span class="s1">path</span>
+
+
+<span class="s0">def </span><span class="s1">get_extended_length_path_str</span><span class="s2">(</span><span class="s1">path</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; str</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;Convert a path to a Windows extended length path.&quot;&quot;&quot;</span>
+    <span class="s1">long_path_prefix </span><span class="s2">= </span><span class="s4">&quot;</span><span class="s0">\\\\</span><span class="s4">?</span><span class="s0">\\</span><span class="s4">&quot;</span>
+    <span class="s1">unc_long_path_prefix </span><span class="s2">= </span><span class="s4">&quot;</span><span class="s0">\\\\</span><span class="s4">?</span><span class="s0">\\</span><span class="s4">UNC</span><span class="s0">\\</span><span class="s4">&quot;</span>
+    <span class="s0">if </span><span class="s1">path</span><span class="s2">.</span><span class="s1">startswith</span><span class="s2">((</span><span class="s1">long_path_prefix</span><span class="s2">, </span><span class="s1">unc_long_path_prefix</span><span class="s2">)):</span>
+        <span class="s0">return </span><span class="s1">path</span>
+    <span class="s5"># UNC</span>
+    <span class="s0">if </span><span class="s1">path</span><span class="s2">.</span><span class="s1">startswith</span><span class="s2">(</span><span class="s4">&quot;</span><span class="s0">\\\\</span><span class="s4">&quot;</span><span class="s2">):</span>
+        <span class="s0">return </span><span class="s1">unc_long_path_prefix </span><span class="s2">+ </span><span class="s1">path</span><span class="s2">[</span><span class="s3">2</span><span class="s2">:]</span>
+    <span class="s0">return </span><span class="s1">long_path_prefix </span><span class="s2">+ </span><span class="s1">path</span>
+
+
+<span class="s0">def </span><span class="s1">rm_rf</span><span class="s2">(</span><span class="s1">path</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;Remove the path contents recursively, even if some elements 
+    are read-only.&quot;&quot;&quot;</span>
+    <span class="s1">path </span><span class="s2">= </span><span class="s1">ensure_extended_length_path</span><span class="s2">(</span><span class="s1">path</span><span class="s2">)</span>
+    <span class="s1">onerror </span><span class="s2">= </span><span class="s1">partial</span><span class="s2">(</span><span class="s1">on_rm_rf_error</span><span class="s2">, </span><span class="s1">start_path</span><span class="s2">=</span><span class="s1">path</span><span class="s2">)</span>
+    <span class="s0">if </span><span class="s1">sys</span><span class="s2">.</span><span class="s1">version_info </span><span class="s2">&gt;= (</span><span class="s3">3</span><span class="s2">, </span><span class="s3">12</span><span class="s2">):</span>
+        <span class="s1">shutil</span><span class="s2">.</span><span class="s1">rmtree</span><span class="s2">(</span><span class="s1">str</span><span class="s2">(</span><span class="s1">path</span><span class="s2">), </span><span class="s1">onexc</span><span class="s2">=</span><span class="s1">onerror</span><span class="s2">)</span>
+    <span class="s0">else</span><span class="s2">:</span>
+        <span class="s1">shutil</span><span class="s2">.</span><span class="s1">rmtree</span><span class="s2">(</span><span class="s1">str</span><span class="s2">(</span><span class="s1">path</span><span class="s2">), </span><span class="s1">onerror</span><span class="s2">=</span><span class="s1">onerror</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">find_prefixed</span><span class="s2">(</span><span class="s1">root</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">, </span><span class="s1">prefix</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; Iterator</span><span class="s2">[</span><span class="s1">Path</span><span class="s2">]:</span>
+    <span class="s6">&quot;&quot;&quot;Find all elements in root that begin with the prefix, case insensitive.&quot;&quot;&quot;</span>
+    <span class="s1">l_prefix </span><span class="s2">= </span><span class="s1">prefix</span><span class="s2">.</span><span class="s1">lower</span><span class="s2">()</span>
+    <span class="s0">for </span><span class="s1">x </span><span class="s0">in </span><span class="s1">root</span><span class="s2">.</span><span class="s1">iterdir</span><span class="s2">():</span>
+        <span class="s0">if </span><span class="s1">x</span><span class="s2">.</span><span class="s1">name</span><span class="s2">.</span><span class="s1">lower</span><span class="s2">().</span><span class="s1">startswith</span><span class="s2">(</span><span class="s1">l_prefix</span><span class="s2">):</span>
+            <span class="s0">yield </span><span class="s1">x</span>
+
+
+<span class="s0">def </span><span class="s1">extract_suffixes</span><span class="s2">(</span><span class="s1">iter</span><span class="s2">: </span><span class="s1">Iterable</span><span class="s2">[</span><span class="s1">PurePath</span><span class="s2">], </span><span class="s1">prefix</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; Iterator</span><span class="s2">[</span><span class="s1">str</span><span class="s2">]:</span>
+    <span class="s6">&quot;&quot;&quot;Return the parts of the paths following the prefix. 
+ 
+    :param iter: Iterator over path names. 
+    :param prefix: Expected prefix of the path names. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">p_len </span><span class="s2">= </span><span class="s1">len</span><span class="s2">(</span><span class="s1">prefix</span><span class="s2">)</span>
+    <span class="s0">for </span><span class="s1">p </span><span class="s0">in </span><span class="s1">iter</span><span class="s2">:</span>
+        <span class="s0">yield </span><span class="s1">p</span><span class="s2">.</span><span class="s1">name</span><span class="s2">[</span><span class="s1">p_len</span><span class="s2">:]</span>
+
+
+<span class="s0">def </span><span class="s1">find_suffixes</span><span class="s2">(</span><span class="s1">root</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">, </span><span class="s1">prefix</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; Iterator</span><span class="s2">[</span><span class="s1">str</span><span class="s2">]:</span>
+    <span class="s6">&quot;&quot;&quot;Combine find_prefixes and extract_suffixes.&quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">extract_suffixes</span><span class="s2">(</span><span class="s1">find_prefixed</span><span class="s2">(</span><span class="s1">root</span><span class="s2">, </span><span class="s1">prefix</span><span class="s2">), </span><span class="s1">prefix</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">parse_num</span><span class="s2">(</span><span class="s1">maybe_num</span><span class="s2">) </span><span class="s1">-&gt; int</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;Parse number path suffixes, returns -1 on error.&quot;&quot;&quot;</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">int</span><span class="s2">(</span><span class="s1">maybe_num</span><span class="s2">)</span>
+    <span class="s0">except </span><span class="s1">ValueError</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s2">-</span><span class="s3">1</span>
+
+
+<span class="s0">def </span><span class="s1">_force_symlink</span><span class="s2">(</span>
+    <span class="s1">root</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">, </span><span class="s1">target</span><span class="s2">: </span><span class="s1">Union</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">PurePath</span><span class="s2">], </span><span class="s1">link_to</span><span class="s2">: </span><span class="s1">Union</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">Path</span><span class="s2">]</span>
+<span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;Helper to create the current symlink. 
+ 
+    It's full of race conditions that are reasonably OK to ignore 
+    for the context of best effort linking to the latest test run. 
+ 
+    The presumption being that in case of much parallelism 
+    the inaccuracy is going to be acceptable. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">current_symlink </span><span class="s2">= </span><span class="s1">root</span><span class="s2">.</span><span class="s1">joinpath</span><span class="s2">(</span><span class="s1">target</span><span class="s2">)</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s1">current_symlink</span><span class="s2">.</span><span class="s1">unlink</span><span class="s2">()</span>
+    <span class="s0">except </span><span class="s1">OSError</span><span class="s2">:</span>
+        <span class="s0">pass</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s1">current_symlink</span><span class="s2">.</span><span class="s1">symlink_to</span><span class="s2">(</span><span class="s1">link_to</span><span class="s2">)</span>
+    <span class="s0">except </span><span class="s1">Exception</span><span class="s2">:</span>
+        <span class="s0">pass</span>
+
+
+<span class="s0">def </span><span class="s1">make_numbered_dir</span><span class="s2">(</span><span class="s1">root</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">, </span><span class="s1">prefix</span><span class="s2">: </span><span class="s1">str</span><span class="s2">, </span><span class="s1">mode</span><span class="s2">: </span><span class="s1">int </span><span class="s2">= </span><span class="s3">0o700</span><span class="s2">) </span><span class="s1">-&gt; Path</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;Create a directory with an increased number as suffix for the given prefix.&quot;&quot;&quot;</span>
+    <span class="s0">for </span><span class="s1">i </span><span class="s0">in </span><span class="s1">range</span><span class="s2">(</span><span class="s3">10</span><span class="s2">):</span>
+        <span class="s5"># try up to 10 times to create the folder</span>
+        <span class="s1">max_existing </span><span class="s2">= </span><span class="s1">max</span><span class="s2">(</span><span class="s1">map</span><span class="s2">(</span><span class="s1">parse_num</span><span class="s2">, </span><span class="s1">find_suffixes</span><span class="s2">(</span><span class="s1">root</span><span class="s2">, </span><span class="s1">prefix</span><span class="s2">)), </span><span class="s1">default</span><span class="s2">=-</span><span class="s3">1</span><span class="s2">)</span>
+        <span class="s1">new_number </span><span class="s2">= </span><span class="s1">max_existing </span><span class="s2">+ </span><span class="s3">1</span>
+        <span class="s1">new_path </span><span class="s2">= </span><span class="s1">root</span><span class="s2">.</span><span class="s1">joinpath</span><span class="s2">(</span><span class="s4">f&quot;</span><span class="s0">{</span><span class="s1">prefix</span><span class="s0">}{</span><span class="s1">new_number</span><span class="s0">}</span><span class="s4">&quot;</span><span class="s2">)</span>
+        <span class="s0">try</span><span class="s2">:</span>
+            <span class="s1">new_path</span><span class="s2">.</span><span class="s1">mkdir</span><span class="s2">(</span><span class="s1">mode</span><span class="s2">=</span><span class="s1">mode</span><span class="s2">)</span>
+        <span class="s0">except </span><span class="s1">Exception</span><span class="s2">:</span>
+            <span class="s0">pass</span>
+        <span class="s0">else</span><span class="s2">:</span>
+            <span class="s1">_force_symlink</span><span class="s2">(</span><span class="s1">root</span><span class="s2">, </span><span class="s1">prefix </span><span class="s2">+ </span><span class="s4">&quot;current&quot;</span><span class="s2">, </span><span class="s1">new_path</span><span class="s2">)</span>
+            <span class="s0">return </span><span class="s1">new_path</span>
+    <span class="s0">else</span><span class="s2">:</span>
+        <span class="s0">raise </span><span class="s1">OSError</span><span class="s2">(</span>
+            <span class="s4">&quot;could not create numbered dir with prefix &quot;</span>
+            <span class="s4">&quot;{prefix} in {root} after 10 tries&quot;</span><span class="s2">.</span><span class="s1">format</span><span class="s2">(</span><span class="s1">prefix</span><span class="s2">=</span><span class="s1">prefix</span><span class="s2">, </span><span class="s1">root</span><span class="s2">=</span><span class="s1">root</span><span class="s2">)</span>
+        <span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">create_cleanup_lock</span><span class="s2">(</span><span class="s1">p</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">) </span><span class="s1">-&gt; Path</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;Create a lock to prevent premature folder cleanup.&quot;&quot;&quot;</span>
+    <span class="s1">lock_path </span><span class="s2">= </span><span class="s1">get_lock_path</span><span class="s2">(</span><span class="s1">p</span><span class="s2">)</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s1">fd </span><span class="s2">= </span><span class="s1">os</span><span class="s2">.</span><span class="s1">open</span><span class="s2">(</span><span class="s1">str</span><span class="s2">(</span><span class="s1">lock_path</span><span class="s2">), </span><span class="s1">os</span><span class="s2">.</span><span class="s1">O_WRONLY </span><span class="s2">| </span><span class="s1">os</span><span class="s2">.</span><span class="s1">O_CREAT </span><span class="s2">| </span><span class="s1">os</span><span class="s2">.</span><span class="s1">O_EXCL</span><span class="s2">, </span><span class="s3">0o644</span><span class="s2">)</span>
+    <span class="s0">except </span><span class="s1">FileExistsError </span><span class="s0">as </span><span class="s1">e</span><span class="s2">:</span>
+        <span class="s0">raise </span><span class="s1">OSError</span><span class="s2">(</span><span class="s4">f&quot;cannot create lockfile in </span><span class="s0">{</span><span class="s1">p</span><span class="s0">}</span><span class="s4">&quot;</span><span class="s2">) </span><span class="s0">from </span><span class="s1">e</span>
+    <span class="s0">else</span><span class="s2">:</span>
+        <span class="s1">pid </span><span class="s2">= </span><span class="s1">os</span><span class="s2">.</span><span class="s1">getpid</span><span class="s2">()</span>
+        <span class="s1">spid </span><span class="s2">= </span><span class="s1">str</span><span class="s2">(</span><span class="s1">pid</span><span class="s2">).</span><span class="s1">encode</span><span class="s2">()</span>
+        <span class="s1">os</span><span class="s2">.</span><span class="s1">write</span><span class="s2">(</span><span class="s1">fd</span><span class="s2">, </span><span class="s1">spid</span><span class="s2">)</span>
+        <span class="s1">os</span><span class="s2">.</span><span class="s1">close</span><span class="s2">(</span><span class="s1">fd</span><span class="s2">)</span>
+        <span class="s0">if not </span><span class="s1">lock_path</span><span class="s2">.</span><span class="s1">is_file</span><span class="s2">():</span>
+            <span class="s0">raise </span><span class="s1">OSError</span><span class="s2">(</span><span class="s4">&quot;lock path got renamed after successful creation&quot;</span><span class="s2">)</span>
+        <span class="s0">return </span><span class="s1">lock_path</span>
+
+
+<span class="s0">def </span><span class="s1">register_cleanup_lock_removal</span><span class="s2">(</span><span class="s1">lock_path</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">, </span><span class="s1">register</span><span class="s2">=</span><span class="s1">atexit</span><span class="s2">.</span><span class="s1">register</span><span class="s2">):</span>
+    <span class="s6">&quot;&quot;&quot;Register a cleanup function for removing a lock, by default on atexit.&quot;&quot;&quot;</span>
+    <span class="s1">pid </span><span class="s2">= </span><span class="s1">os</span><span class="s2">.</span><span class="s1">getpid</span><span class="s2">()</span>
+
+    <span class="s0">def </span><span class="s1">cleanup_on_exit</span><span class="s2">(</span><span class="s1">lock_path</span><span class="s2">: </span><span class="s1">Path </span><span class="s2">= </span><span class="s1">lock_path</span><span class="s2">, </span><span class="s1">original_pid</span><span class="s2">: </span><span class="s1">int </span><span class="s2">= </span><span class="s1">pid</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s1">current_pid </span><span class="s2">= </span><span class="s1">os</span><span class="s2">.</span><span class="s1">getpid</span><span class="s2">()</span>
+        <span class="s0">if </span><span class="s1">current_pid </span><span class="s2">!= </span><span class="s1">original_pid</span><span class="s2">:</span>
+            <span class="s5"># fork</span>
+            <span class="s0">return</span>
+        <span class="s0">try</span><span class="s2">:</span>
+            <span class="s1">lock_path</span><span class="s2">.</span><span class="s1">unlink</span><span class="s2">()</span>
+        <span class="s0">except </span><span class="s1">OSError</span><span class="s2">:</span>
+            <span class="s0">pass</span>
+
+    <span class="s0">return </span><span class="s1">register</span><span class="s2">(</span><span class="s1">cleanup_on_exit</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">maybe_delete_a_numbered_dir</span><span class="s2">(</span><span class="s1">path</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;Remove a numbered directory if its lock can be obtained and it does 
+    not seem to be in use.&quot;&quot;&quot;</span>
+    <span class="s1">path </span><span class="s2">= </span><span class="s1">ensure_extended_length_path</span><span class="s2">(</span><span class="s1">path</span><span class="s2">)</span>
+    <span class="s1">lock_path </span><span class="s2">= </span><span class="s0">None</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s1">lock_path </span><span class="s2">= </span><span class="s1">create_cleanup_lock</span><span class="s2">(</span><span class="s1">path</span><span class="s2">)</span>
+        <span class="s1">parent </span><span class="s2">= </span><span class="s1">path</span><span class="s2">.</span><span class="s1">parent</span>
+
+        <span class="s1">garbage </span><span class="s2">= </span><span class="s1">parent</span><span class="s2">.</span><span class="s1">joinpath</span><span class="s2">(</span><span class="s4">f&quot;garbage-</span><span class="s0">{</span><span class="s1">uuid</span><span class="s2">.</span><span class="s1">uuid4</span><span class="s2">()</span><span class="s0">}</span><span class="s4">&quot;</span><span class="s2">)</span>
+        <span class="s1">path</span><span class="s2">.</span><span class="s1">rename</span><span class="s2">(</span><span class="s1">garbage</span><span class="s2">)</span>
+        <span class="s1">rm_rf</span><span class="s2">(</span><span class="s1">garbage</span><span class="s2">)</span>
+    <span class="s0">except </span><span class="s1">OSError</span><span class="s2">:</span>
+        <span class="s5">#  known races:</span>
+        <span class="s5">#  * other process did a cleanup at the same time</span>
+        <span class="s5">#  * deletable folder was found</span>
+        <span class="s5">#  * process cwd (Windows)</span>
+        <span class="s0">return</span>
+    <span class="s0">finally</span><span class="s2">:</span>
+        <span class="s5"># If we created the lock, ensure we remove it even if we failed</span>
+        <span class="s5"># to properly remove the numbered dir.</span>
+        <span class="s0">if </span><span class="s1">lock_path </span><span class="s0">is not None</span><span class="s2">:</span>
+            <span class="s0">try</span><span class="s2">:</span>
+                <span class="s1">lock_path</span><span class="s2">.</span><span class="s1">unlink</span><span class="s2">()</span>
+            <span class="s0">except </span><span class="s1">OSError</span><span class="s2">:</span>
+                <span class="s0">pass</span>
+
+
+<span class="s0">def </span><span class="s1">ensure_deletable</span><span class="s2">(</span><span class="s1">path</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">, </span><span class="s1">consider_lock_dead_if_created_before</span><span class="s2">: </span><span class="s1">float</span><span class="s2">) </span><span class="s1">-&gt; bool</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;Check if `path` is deletable based on whether the lock file is expired.&quot;&quot;&quot;</span>
+    <span class="s0">if </span><span class="s1">path</span><span class="s2">.</span><span class="s1">is_symlink</span><span class="s2">():</span>
+        <span class="s0">return False</span>
+    <span class="s1">lock </span><span class="s2">= </span><span class="s1">get_lock_path</span><span class="s2">(</span><span class="s1">path</span><span class="s2">)</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s0">if not </span><span class="s1">lock</span><span class="s2">.</span><span class="s1">is_file</span><span class="s2">():</span>
+            <span class="s0">return True</span>
+    <span class="s0">except </span><span class="s1">OSError</span><span class="s2">:</span>
+        <span class="s5"># we might not have access to the lock file at all, in this case assume</span>
+        <span class="s5"># we don't have access to the entire directory (#7491).</span>
+        <span class="s0">return False</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s1">lock_time </span><span class="s2">= </span><span class="s1">lock</span><span class="s2">.</span><span class="s1">stat</span><span class="s2">().</span><span class="s1">st_mtime</span>
+    <span class="s0">except </span><span class="s1">Exception</span><span class="s2">:</span>
+        <span class="s0">return False</span>
+    <span class="s0">else</span><span class="s2">:</span>
+        <span class="s0">if </span><span class="s1">lock_time </span><span class="s2">&lt; </span><span class="s1">consider_lock_dead_if_created_before</span><span class="s2">:</span>
+            <span class="s5"># We want to ignore any errors while trying to remove the lock such as:</span>
+            <span class="s5"># - PermissionDenied, like the file permissions have changed since the lock creation;</span>
+            <span class="s5"># - FileNotFoundError, in case another pytest process got here first;</span>
+            <span class="s5"># and any other cause of failure.</span>
+            <span class="s0">with </span><span class="s1">contextlib</span><span class="s2">.</span><span class="s1">suppress</span><span class="s2">(</span><span class="s1">OSError</span><span class="s2">):</span>
+                <span class="s1">lock</span><span class="s2">.</span><span class="s1">unlink</span><span class="s2">()</span>
+                <span class="s0">return True</span>
+        <span class="s0">return False</span>
+
+
+<span class="s0">def </span><span class="s1">try_cleanup</span><span class="s2">(</span><span class="s1">path</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">, </span><span class="s1">consider_lock_dead_if_created_before</span><span class="s2">: </span><span class="s1">float</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;Try to cleanup a folder if we can ensure it's deletable.&quot;&quot;&quot;</span>
+    <span class="s0">if </span><span class="s1">ensure_deletable</span><span class="s2">(</span><span class="s1">path</span><span class="s2">, </span><span class="s1">consider_lock_dead_if_created_before</span><span class="s2">):</span>
+        <span class="s1">maybe_delete_a_numbered_dir</span><span class="s2">(</span><span class="s1">path</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">cleanup_candidates</span><span class="s2">(</span><span class="s1">root</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">, </span><span class="s1">prefix</span><span class="s2">: </span><span class="s1">str</span><span class="s2">, </span><span class="s1">keep</span><span class="s2">: </span><span class="s1">int</span><span class="s2">) </span><span class="s1">-&gt; Iterator</span><span class="s2">[</span><span class="s1">Path</span><span class="s2">]:</span>
+    <span class="s6">&quot;&quot;&quot;List candidates for numbered directories to be removed - follows py.path.&quot;&quot;&quot;</span>
+    <span class="s1">max_existing </span><span class="s2">= </span><span class="s1">max</span><span class="s2">(</span><span class="s1">map</span><span class="s2">(</span><span class="s1">parse_num</span><span class="s2">, </span><span class="s1">find_suffixes</span><span class="s2">(</span><span class="s1">root</span><span class="s2">, </span><span class="s1">prefix</span><span class="s2">)), </span><span class="s1">default</span><span class="s2">=-</span><span class="s3">1</span><span class="s2">)</span>
+    <span class="s1">max_delete </span><span class="s2">= </span><span class="s1">max_existing </span><span class="s2">- </span><span class="s1">keep</span>
+    <span class="s1">paths </span><span class="s2">= </span><span class="s1">find_prefixed</span><span class="s2">(</span><span class="s1">root</span><span class="s2">, </span><span class="s1">prefix</span><span class="s2">)</span>
+    <span class="s1">paths</span><span class="s2">, </span><span class="s1">paths2 </span><span class="s2">= </span><span class="s1">itertools</span><span class="s2">.</span><span class="s1">tee</span><span class="s2">(</span><span class="s1">paths</span><span class="s2">)</span>
+    <span class="s1">numbers </span><span class="s2">= </span><span class="s1">map</span><span class="s2">(</span><span class="s1">parse_num</span><span class="s2">, </span><span class="s1">extract_suffixes</span><span class="s2">(</span><span class="s1">paths2</span><span class="s2">, </span><span class="s1">prefix</span><span class="s2">))</span>
+    <span class="s0">for </span><span class="s1">path</span><span class="s2">, </span><span class="s1">number </span><span class="s0">in </span><span class="s1">zip</span><span class="s2">(</span><span class="s1">paths</span><span class="s2">, </span><span class="s1">numbers</span><span class="s2">):</span>
+        <span class="s0">if </span><span class="s1">number </span><span class="s2">&lt;= </span><span class="s1">max_delete</span><span class="s2">:</span>
+            <span class="s0">yield </span><span class="s1">path</span>
+
+
+<span class="s0">def </span><span class="s1">cleanup_dead_symlinks</span><span class="s2">(</span><span class="s1">root</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">):</span>
+    <span class="s0">for </span><span class="s1">left_dir </span><span class="s0">in </span><span class="s1">root</span><span class="s2">.</span><span class="s1">iterdir</span><span class="s2">():</span>
+        <span class="s0">if </span><span class="s1">left_dir</span><span class="s2">.</span><span class="s1">is_symlink</span><span class="s2">():</span>
+            <span class="s0">if not </span><span class="s1">left_dir</span><span class="s2">.</span><span class="s1">resolve</span><span class="s2">().</span><span class="s1">exists</span><span class="s2">():</span>
+                <span class="s1">left_dir</span><span class="s2">.</span><span class="s1">unlink</span><span class="s2">()</span>
+
+
+<span class="s0">def </span><span class="s1">cleanup_numbered_dir</span><span class="s2">(</span>
+    <span class="s1">root</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">, </span><span class="s1">prefix</span><span class="s2">: </span><span class="s1">str</span><span class="s2">, </span><span class="s1">keep</span><span class="s2">: </span><span class="s1">int</span><span class="s2">, </span><span class="s1">consider_lock_dead_if_created_before</span><span class="s2">: </span><span class="s1">float</span>
+<span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;Cleanup for lock driven numbered directories.&quot;&quot;&quot;</span>
+    <span class="s0">if not </span><span class="s1">root</span><span class="s2">.</span><span class="s1">exists</span><span class="s2">():</span>
+        <span class="s0">return</span>
+    <span class="s0">for </span><span class="s1">path </span><span class="s0">in </span><span class="s1">cleanup_candidates</span><span class="s2">(</span><span class="s1">root</span><span class="s2">, </span><span class="s1">prefix</span><span class="s2">, </span><span class="s1">keep</span><span class="s2">):</span>
+        <span class="s1">try_cleanup</span><span class="s2">(</span><span class="s1">path</span><span class="s2">, </span><span class="s1">consider_lock_dead_if_created_before</span><span class="s2">)</span>
+    <span class="s0">for </span><span class="s1">path </span><span class="s0">in </span><span class="s1">root</span><span class="s2">.</span><span class="s1">glob</span><span class="s2">(</span><span class="s4">&quot;garbage-*&quot;</span><span class="s2">):</span>
+        <span class="s1">try_cleanup</span><span class="s2">(</span><span class="s1">path</span><span class="s2">, </span><span class="s1">consider_lock_dead_if_created_before</span><span class="s2">)</span>
+
+    <span class="s1">cleanup_dead_symlinks</span><span class="s2">(</span><span class="s1">root</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">make_numbered_dir_with_cleanup</span><span class="s2">(</span>
+    <span class="s1">root</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">,</span>
+    <span class="s1">prefix</span><span class="s2">: </span><span class="s1">str</span><span class="s2">,</span>
+    <span class="s1">keep</span><span class="s2">: </span><span class="s1">int</span><span class="s2">,</span>
+    <span class="s1">lock_timeout</span><span class="s2">: </span><span class="s1">float</span><span class="s2">,</span>
+    <span class="s1">mode</span><span class="s2">: </span><span class="s1">int</span><span class="s2">,</span>
+<span class="s2">) </span><span class="s1">-&gt; Path</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;Create a numbered dir with a cleanup lock and remove old ones.&quot;&quot;&quot;</span>
+    <span class="s1">e </span><span class="s2">= </span><span class="s0">None</span>
+    <span class="s0">for </span><span class="s1">i </span><span class="s0">in </span><span class="s1">range</span><span class="s2">(</span><span class="s3">10</span><span class="s2">):</span>
+        <span class="s0">try</span><span class="s2">:</span>
+            <span class="s1">p </span><span class="s2">= </span><span class="s1">make_numbered_dir</span><span class="s2">(</span><span class="s1">root</span><span class="s2">, </span><span class="s1">prefix</span><span class="s2">, </span><span class="s1">mode</span><span class="s2">)</span>
+            <span class="s5"># Only lock the current dir when keep is not 0</span>
+            <span class="s0">if </span><span class="s1">keep </span><span class="s2">!= </span><span class="s3">0</span><span class="s2">:</span>
+                <span class="s1">lock_path </span><span class="s2">= </span><span class="s1">create_cleanup_lock</span><span class="s2">(</span><span class="s1">p</span><span class="s2">)</span>
+                <span class="s1">register_cleanup_lock_removal</span><span class="s2">(</span><span class="s1">lock_path</span><span class="s2">)</span>
+        <span class="s0">except </span><span class="s1">Exception </span><span class="s0">as </span><span class="s1">exc</span><span class="s2">:</span>
+            <span class="s1">e </span><span class="s2">= </span><span class="s1">exc</span>
+        <span class="s0">else</span><span class="s2">:</span>
+            <span class="s1">consider_lock_dead_if_created_before </span><span class="s2">= </span><span class="s1">p</span><span class="s2">.</span><span class="s1">stat</span><span class="s2">().</span><span class="s1">st_mtime </span><span class="s2">- </span><span class="s1">lock_timeout</span>
+            <span class="s5"># Register a cleanup for program exit</span>
+            <span class="s1">atexit</span><span class="s2">.</span><span class="s1">register</span><span class="s2">(</span>
+                <span class="s1">cleanup_numbered_dir</span><span class="s2">,</span>
+                <span class="s1">root</span><span class="s2">,</span>
+                <span class="s1">prefix</span><span class="s2">,</span>
+                <span class="s1">keep</span><span class="s2">,</span>
+                <span class="s1">consider_lock_dead_if_created_before</span><span class="s2">,</span>
+            <span class="s2">)</span>
+            <span class="s0">return </span><span class="s1">p</span>
+    <span class="s0">assert </span><span class="s1">e </span><span class="s0">is not None</span>
+    <span class="s0">raise </span><span class="s1">e</span>
+
+
+<span class="s0">def </span><span class="s1">resolve_from_str</span><span class="s2">(</span><span class="s1">input</span><span class="s2">: </span><span class="s1">str</span><span class="s2">, </span><span class="s1">rootpath</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">) </span><span class="s1">-&gt; Path</span><span class="s2">:</span>
+    <span class="s1">input </span><span class="s2">= </span><span class="s1">expanduser</span><span class="s2">(</span><span class="s1">input</span><span class="s2">)</span>
+    <span class="s1">input </span><span class="s2">= </span><span class="s1">expandvars</span><span class="s2">(</span><span class="s1">input</span><span class="s2">)</span>
+    <span class="s0">if </span><span class="s1">isabs</span><span class="s2">(</span><span class="s1">input</span><span class="s2">):</span>
+        <span class="s0">return </span><span class="s1">Path</span><span class="s2">(</span><span class="s1">input</span><span class="s2">)</span>
+    <span class="s0">else</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">rootpath</span><span class="s2">.</span><span class="s1">joinpath</span><span class="s2">(</span><span class="s1">input</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">fnmatch_ex</span><span class="s2">(</span><span class="s1">pattern</span><span class="s2">: </span><span class="s1">str</span><span class="s2">, </span><span class="s1">path</span><span class="s2">: </span><span class="s1">Union</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s4">&quot;os.PathLike[str]&quot;</span><span class="s2">]) </span><span class="s1">-&gt; bool</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;A port of FNMatcher from py.path.common which works with PurePath() instances. 
+ 
+    The difference between this algorithm and PurePath.match() is that the 
+    latter matches &quot;**&quot; glob expressions for each part of the path, while 
+    this algorithm uses the whole path instead. 
+ 
+    For example: 
+        &quot;tests/foo/bar/doc/test_foo.py&quot; matches pattern &quot;tests/**/doc/test*.py&quot; 
+        with this algorithm, but not with PurePath.match(). 
+ 
+    This algorithm was ported to keep backward-compatibility with existing 
+    settings which assume paths match according this logic. 
+ 
+    References: 
+    * https://bugs.python.org/issue29249 
+    * https://bugs.python.org/issue34731 
+    &quot;&quot;&quot;</span>
+    <span class="s1">path </span><span class="s2">= </span><span class="s1">PurePath</span><span class="s2">(</span><span class="s1">path</span><span class="s2">)</span>
+    <span class="s1">iswin32 </span><span class="s2">= </span><span class="s1">sys</span><span class="s2">.</span><span class="s1">platform</span><span class="s2">.</span><span class="s1">startswith</span><span class="s2">(</span><span class="s4">&quot;win&quot;</span><span class="s2">)</span>
+
+    <span class="s0">if </span><span class="s1">iswin32 </span><span class="s0">and </span><span class="s1">sep </span><span class="s0">not in </span><span class="s1">pattern </span><span class="s0">and </span><span class="s1">posix_sep </span><span class="s0">in </span><span class="s1">pattern</span><span class="s2">:</span>
+        <span class="s5"># Running on Windows, the pattern has no Windows path separators,</span>
+        <span class="s5"># and the pattern has one or more Posix path separators. Replace</span>
+        <span class="s5"># the Posix path separators with the Windows path separator.</span>
+        <span class="s1">pattern </span><span class="s2">= </span><span class="s1">pattern</span><span class="s2">.</span><span class="s1">replace</span><span class="s2">(</span><span class="s1">posix_sep</span><span class="s2">, </span><span class="s1">sep</span><span class="s2">)</span>
+
+    <span class="s0">if </span><span class="s1">sep </span><span class="s0">not in </span><span class="s1">pattern</span><span class="s2">:</span>
+        <span class="s1">name </span><span class="s2">= </span><span class="s1">path</span><span class="s2">.</span><span class="s1">name</span>
+    <span class="s0">else</span><span class="s2">:</span>
+        <span class="s1">name </span><span class="s2">= </span><span class="s1">str</span><span class="s2">(</span><span class="s1">path</span><span class="s2">)</span>
+        <span class="s0">if </span><span class="s1">path</span><span class="s2">.</span><span class="s1">is_absolute</span><span class="s2">() </span><span class="s0">and not </span><span class="s1">os</span><span class="s2">.</span><span class="s1">path</span><span class="s2">.</span><span class="s1">isabs</span><span class="s2">(</span><span class="s1">pattern</span><span class="s2">):</span>
+            <span class="s1">pattern </span><span class="s2">= </span><span class="s4">f&quot;*</span><span class="s0">{</span><span class="s1">os</span><span class="s2">.</span><span class="s1">sep</span><span class="s0">}{</span><span class="s1">pattern</span><span class="s0">}</span><span class="s4">&quot;</span>
+    <span class="s0">return </span><span class="s1">fnmatch</span><span class="s2">.</span><span class="s1">fnmatch</span><span class="s2">(</span><span class="s1">name</span><span class="s2">, </span><span class="s1">pattern</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">parts</span><span class="s2">(</span><span class="s1">s</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; Set</span><span class="s2">[</span><span class="s1">str</span><span class="s2">]:</span>
+    <span class="s1">parts </span><span class="s2">= </span><span class="s1">s</span><span class="s2">.</span><span class="s1">split</span><span class="s2">(</span><span class="s1">sep</span><span class="s2">)</span>
+    <span class="s0">return </span><span class="s2">{</span><span class="s1">sep</span><span class="s2">.</span><span class="s1">join</span><span class="s2">(</span><span class="s1">parts</span><span class="s2">[: </span><span class="s1">i </span><span class="s2">+ </span><span class="s3">1</span><span class="s2">]) </span><span class="s0">or </span><span class="s1">sep </span><span class="s0">for </span><span class="s1">i </span><span class="s0">in </span><span class="s1">range</span><span class="s2">(</span><span class="s1">len</span><span class="s2">(</span><span class="s1">parts</span><span class="s2">))}</span>
+
+
+<span class="s0">def </span><span class="s1">symlink_or_skip</span><span class="s2">(</span><span class="s1">src</span><span class="s2">, </span><span class="s1">dst</span><span class="s2">, **</span><span class="s1">kwargs</span><span class="s2">):</span>
+    <span class="s6">&quot;&quot;&quot;Make a symlink, or skip the test in case symlinks are not supported.&quot;&quot;&quot;</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s1">os</span><span class="s2">.</span><span class="s1">symlink</span><span class="s2">(</span><span class="s1">str</span><span class="s2">(</span><span class="s1">src</span><span class="s2">), </span><span class="s1">str</span><span class="s2">(</span><span class="s1">dst</span><span class="s2">), **</span><span class="s1">kwargs</span><span class="s2">)</span>
+    <span class="s0">except </span><span class="s1">OSError </span><span class="s0">as </span><span class="s1">e</span><span class="s2">:</span>
+        <span class="s1">skip</span><span class="s2">(</span><span class="s4">f&quot;symlinks not supported: </span><span class="s0">{</span><span class="s1">e</span><span class="s0">}</span><span class="s4">&quot;</span><span class="s2">)</span>
+
+
+<span class="s0">class </span><span class="s1">ImportMode</span><span class="s2">(</span><span class="s1">Enum</span><span class="s2">):</span>
+    <span class="s6">&quot;&quot;&quot;Possible values for `mode` parameter of `import_path`.&quot;&quot;&quot;</span>
+
+    <span class="s1">prepend </span><span class="s2">= </span><span class="s4">&quot;prepend&quot;</span>
+    <span class="s1">append </span><span class="s2">= </span><span class="s4">&quot;append&quot;</span>
+    <span class="s1">importlib </span><span class="s2">= </span><span class="s4">&quot;importlib&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">ImportPathMismatchError</span><span class="s2">(</span><span class="s1">ImportError</span><span class="s2">):</span>
+    <span class="s6">&quot;&quot;&quot;Raised on import_path() if there is a mismatch of __file__'s. 
+ 
+    This can happen when `import_path` is called multiple times with different filenames that has 
+    the same basename but reside in packages 
+    (for example &quot;/tests1/test_foo.py&quot; and &quot;/tests2/test_foo.py&quot;). 
+    &quot;&quot;&quot;</span>
+
+
+<span class="s0">def </span><span class="s1">import_path</span><span class="s2">(</span>
+    <span class="s1">p</span><span class="s2">: </span><span class="s1">Union</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s4">&quot;os.PathLike[str]&quot;</span><span class="s2">],</span>
+    <span class="s2">*,</span>
+    <span class="s1">mode</span><span class="s2">: </span><span class="s1">Union</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">ImportMode</span><span class="s2">] = </span><span class="s1">ImportMode</span><span class="s2">.</span><span class="s1">prepend</span><span class="s2">,</span>
+    <span class="s1">root</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">,</span>
+<span class="s2">) </span><span class="s1">-&gt; ModuleType</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;Import and return a module from the given path, which can be a file (a module) or 
+    a directory (a package). 
+ 
+    The import mechanism used is controlled by the `mode` parameter: 
+ 
+    * `mode == ImportMode.prepend`: the directory containing the module (or package, taking 
+      `__init__.py` files into account) will be put at the *start* of `sys.path` before 
+      being imported with `importlib.import_module`. 
+ 
+    * `mode == ImportMode.append`: same as `prepend`, but the directory will be appended 
+      to the end of `sys.path`, if not already in `sys.path`. 
+ 
+    * `mode == ImportMode.importlib`: uses more fine control mechanisms provided by `importlib` 
+      to import the module, which avoids having to muck with `sys.path` at all. It effectively 
+      allows having same-named test modules in different places. 
+ 
+    :param root: 
+        Used as an anchor when mode == ImportMode.importlib to obtain 
+        a unique name for the module being imported so it can safely be stored 
+        into ``sys.modules``. 
+ 
+    :raises ImportPathMismatchError: 
+        If after importing the given `path` and the module `__file__` 
+        are different. Only raised in `prepend` and `append` modes. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">mode </span><span class="s2">= </span><span class="s1">ImportMode</span><span class="s2">(</span><span class="s1">mode</span><span class="s2">)</span>
+
+    <span class="s1">path </span><span class="s2">= </span><span class="s1">Path</span><span class="s2">(</span><span class="s1">p</span><span class="s2">)</span>
+
+    <span class="s0">if not </span><span class="s1">path</span><span class="s2">.</span><span class="s1">exists</span><span class="s2">():</span>
+        <span class="s0">raise </span><span class="s1">ImportError</span><span class="s2">(</span><span class="s1">path</span><span class="s2">)</span>
+
+    <span class="s0">if </span><span class="s1">mode </span><span class="s0">is </span><span class="s1">ImportMode</span><span class="s2">.</span><span class="s1">importlib</span><span class="s2">:</span>
+        <span class="s1">module_name </span><span class="s2">= </span><span class="s1">module_name_from_path</span><span class="s2">(</span><span class="s1">path</span><span class="s2">, </span><span class="s1">root</span><span class="s2">)</span>
+        <span class="s0">with </span><span class="s1">contextlib</span><span class="s2">.</span><span class="s1">suppress</span><span class="s2">(</span><span class="s1">KeyError</span><span class="s2">):</span>
+            <span class="s0">return </span><span class="s1">sys</span><span class="s2">.</span><span class="s1">modules</span><span class="s2">[</span><span class="s1">module_name</span><span class="s2">]</span>
+
+        <span class="s0">for </span><span class="s1">meta_importer </span><span class="s0">in </span><span class="s1">sys</span><span class="s2">.</span><span class="s1">meta_path</span><span class="s2">:</span>
+            <span class="s1">spec </span><span class="s2">= </span><span class="s1">meta_importer</span><span class="s2">.</span><span class="s1">find_spec</span><span class="s2">(</span><span class="s1">module_name</span><span class="s2">, [</span><span class="s1">str</span><span class="s2">(</span><span class="s1">path</span><span class="s2">.</span><span class="s1">parent</span><span class="s2">)])</span>
+            <span class="s0">if </span><span class="s1">spec </span><span class="s0">is not None</span><span class="s2">:</span>
+                <span class="s0">break</span>
+        <span class="s0">else</span><span class="s2">:</span>
+            <span class="s1">spec </span><span class="s2">= </span><span class="s1">importlib</span><span class="s2">.</span><span class="s1">util</span><span class="s2">.</span><span class="s1">spec_from_file_location</span><span class="s2">(</span><span class="s1">module_name</span><span class="s2">, </span><span class="s1">str</span><span class="s2">(</span><span class="s1">path</span><span class="s2">))</span>
+
+        <span class="s0">if </span><span class="s1">spec </span><span class="s0">is None</span><span class="s2">:</span>
+            <span class="s0">raise </span><span class="s1">ImportError</span><span class="s2">(</span><span class="s4">f&quot;Can't find module </span><span class="s0">{</span><span class="s1">module_name</span><span class="s0">} </span><span class="s4">at location </span><span class="s0">{</span><span class="s1">path</span><span class="s0">}</span><span class="s4">&quot;</span><span class="s2">)</span>
+        <span class="s1">mod </span><span class="s2">= </span><span class="s1">importlib</span><span class="s2">.</span><span class="s1">util</span><span class="s2">.</span><span class="s1">module_from_spec</span><span class="s2">(</span><span class="s1">spec</span><span class="s2">)</span>
+        <span class="s1">sys</span><span class="s2">.</span><span class="s1">modules</span><span class="s2">[</span><span class="s1">module_name</span><span class="s2">] = </span><span class="s1">mod</span>
+        <span class="s1">spec</span><span class="s2">.</span><span class="s1">loader</span><span class="s2">.</span><span class="s1">exec_module</span><span class="s2">(</span><span class="s1">mod</span><span class="s2">)  </span><span class="s5"># type: ignore[union-attr]</span>
+        <span class="s1">insert_missing_modules</span><span class="s2">(</span><span class="s1">sys</span><span class="s2">.</span><span class="s1">modules</span><span class="s2">, </span><span class="s1">module_name</span><span class="s2">)</span>
+        <span class="s0">return </span><span class="s1">mod</span>
+
+    <span class="s1">pkg_path </span><span class="s2">= </span><span class="s1">resolve_package_path</span><span class="s2">(</span><span class="s1">path</span><span class="s2">)</span>
+    <span class="s0">if </span><span class="s1">pkg_path </span><span class="s0">is not None</span><span class="s2">:</span>
+        <span class="s1">pkg_root </span><span class="s2">= </span><span class="s1">pkg_path</span><span class="s2">.</span><span class="s1">parent</span>
+        <span class="s1">names </span><span class="s2">= </span><span class="s1">list</span><span class="s2">(</span><span class="s1">path</span><span class="s2">.</span><span class="s1">with_suffix</span><span class="s2">(</span><span class="s4">&quot;&quot;</span><span class="s2">).</span><span class="s1">relative_to</span><span class="s2">(</span><span class="s1">pkg_root</span><span class="s2">).</span><span class="s1">parts</span><span class="s2">)</span>
+        <span class="s0">if </span><span class="s1">names</span><span class="s2">[-</span><span class="s3">1</span><span class="s2">] == </span><span class="s4">&quot;__init__&quot;</span><span class="s2">:</span>
+            <span class="s1">names</span><span class="s2">.</span><span class="s1">pop</span><span class="s2">()</span>
+        <span class="s1">module_name </span><span class="s2">= </span><span class="s4">&quot;.&quot;</span><span class="s2">.</span><span class="s1">join</span><span class="s2">(</span><span class="s1">names</span><span class="s2">)</span>
+    <span class="s0">else</span><span class="s2">:</span>
+        <span class="s1">pkg_root </span><span class="s2">= </span><span class="s1">path</span><span class="s2">.</span><span class="s1">parent</span>
+        <span class="s1">module_name </span><span class="s2">= </span><span class="s1">path</span><span class="s2">.</span><span class="s1">stem</span>
+
+    <span class="s5"># Change sys.path permanently: restoring it at the end of this function would cause surprising</span>
+    <span class="s5"># problems because of delayed imports: for example, a conftest.py file imported by this function</span>
+    <span class="s5"># might have local imports, which would fail at runtime if we restored sys.path.</span>
+    <span class="s0">if </span><span class="s1">mode </span><span class="s0">is </span><span class="s1">ImportMode</span><span class="s2">.</span><span class="s1">append</span><span class="s2">:</span>
+        <span class="s0">if </span><span class="s1">str</span><span class="s2">(</span><span class="s1">pkg_root</span><span class="s2">) </span><span class="s0">not in </span><span class="s1">sys</span><span class="s2">.</span><span class="s1">path</span><span class="s2">:</span>
+            <span class="s1">sys</span><span class="s2">.</span><span class="s1">path</span><span class="s2">.</span><span class="s1">append</span><span class="s2">(</span><span class="s1">str</span><span class="s2">(</span><span class="s1">pkg_root</span><span class="s2">))</span>
+    <span class="s0">elif </span><span class="s1">mode </span><span class="s0">is </span><span class="s1">ImportMode</span><span class="s2">.</span><span class="s1">prepend</span><span class="s2">:</span>
+        <span class="s0">if </span><span class="s1">str</span><span class="s2">(</span><span class="s1">pkg_root</span><span class="s2">) != </span><span class="s1">sys</span><span class="s2">.</span><span class="s1">path</span><span class="s2">[</span><span class="s3">0</span><span class="s2">]:</span>
+            <span class="s1">sys</span><span class="s2">.</span><span class="s1">path</span><span class="s2">.</span><span class="s1">insert</span><span class="s2">(</span><span class="s3">0</span><span class="s2">, </span><span class="s1">str</span><span class="s2">(</span><span class="s1">pkg_root</span><span class="s2">))</span>
+    <span class="s0">else</span><span class="s2">:</span>
+        <span class="s1">assert_never</span><span class="s2">(</span><span class="s1">mode</span><span class="s2">)</span>
+
+    <span class="s1">importlib</span><span class="s2">.</span><span class="s1">import_module</span><span class="s2">(</span><span class="s1">module_name</span><span class="s2">)</span>
+
+    <span class="s1">mod </span><span class="s2">= </span><span class="s1">sys</span><span class="s2">.</span><span class="s1">modules</span><span class="s2">[</span><span class="s1">module_name</span><span class="s2">]</span>
+    <span class="s0">if </span><span class="s1">path</span><span class="s2">.</span><span class="s1">name </span><span class="s2">== </span><span class="s4">&quot;__init__.py&quot;</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">mod</span>
+
+    <span class="s1">ignore </span><span class="s2">= </span><span class="s1">os</span><span class="s2">.</span><span class="s1">environ</span><span class="s2">.</span><span class="s1">get</span><span class="s2">(</span><span class="s4">&quot;PY_IGNORE_IMPORTMISMATCH&quot;</span><span class="s2">, </span><span class="s4">&quot;&quot;</span><span class="s2">)</span>
+    <span class="s0">if </span><span class="s1">ignore </span><span class="s2">!= </span><span class="s4">&quot;1&quot;</span><span class="s2">:</span>
+        <span class="s1">module_file </span><span class="s2">= </span><span class="s1">mod</span><span class="s2">.</span><span class="s1">__file__</span>
+        <span class="s0">if </span><span class="s1">module_file </span><span class="s0">is None</span><span class="s2">:</span>
+            <span class="s0">raise </span><span class="s1">ImportPathMismatchError</span><span class="s2">(</span><span class="s1">module_name</span><span class="s2">, </span><span class="s1">module_file</span><span class="s2">, </span><span class="s1">path</span><span class="s2">)</span>
+
+        <span class="s0">if </span><span class="s1">module_file</span><span class="s2">.</span><span class="s1">endswith</span><span class="s2">((</span><span class="s4">&quot;.pyc&quot;</span><span class="s2">, </span><span class="s4">&quot;.pyo&quot;</span><span class="s2">)):</span>
+            <span class="s1">module_file </span><span class="s2">= </span><span class="s1">module_file</span><span class="s2">[:-</span><span class="s3">1</span><span class="s2">]</span>
+        <span class="s0">if </span><span class="s1">module_file</span><span class="s2">.</span><span class="s1">endswith</span><span class="s2">(</span><span class="s1">os</span><span class="s2">.</span><span class="s1">sep </span><span class="s2">+ </span><span class="s4">&quot;__init__.py&quot;</span><span class="s2">):</span>
+            <span class="s1">module_file </span><span class="s2">= </span><span class="s1">module_file</span><span class="s2">[: -(</span><span class="s1">len</span><span class="s2">(</span><span class="s1">os</span><span class="s2">.</span><span class="s1">sep </span><span class="s2">+ </span><span class="s4">&quot;__init__.py&quot;</span><span class="s2">))]</span>
+
+        <span class="s0">try</span><span class="s2">:</span>
+            <span class="s1">is_same </span><span class="s2">= </span><span class="s1">_is_same</span><span class="s2">(</span><span class="s1">str</span><span class="s2">(</span><span class="s1">path</span><span class="s2">), </span><span class="s1">module_file</span><span class="s2">)</span>
+        <span class="s0">except </span><span class="s1">FileNotFoundError</span><span class="s2">:</span>
+            <span class="s1">is_same </span><span class="s2">= </span><span class="s0">False</span>
+
+        <span class="s0">if not </span><span class="s1">is_same</span><span class="s2">:</span>
+            <span class="s0">raise </span><span class="s1">ImportPathMismatchError</span><span class="s2">(</span><span class="s1">module_name</span><span class="s2">, </span><span class="s1">module_file</span><span class="s2">, </span><span class="s1">path</span><span class="s2">)</span>
+
+    <span class="s0">return </span><span class="s1">mod</span>
+
+
+<span class="s5"># Implement a special _is_same function on Windows which returns True if the two filenames</span>
+<span class="s5"># compare equal, to circumvent os.path.samefile returning False for mounts in UNC (#7678).</span>
+<span class="s0">if </span><span class="s1">sys</span><span class="s2">.</span><span class="s1">platform</span><span class="s2">.</span><span class="s1">startswith</span><span class="s2">(</span><span class="s4">&quot;win&quot;</span><span class="s2">):</span>
+
+    <span class="s0">def </span><span class="s1">_is_same</span><span class="s2">(</span><span class="s1">f1</span><span class="s2">: </span><span class="s1">str</span><span class="s2">, </span><span class="s1">f2</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; bool</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">Path</span><span class="s2">(</span><span class="s1">f1</span><span class="s2">) == </span><span class="s1">Path</span><span class="s2">(</span><span class="s1">f2</span><span class="s2">) </span><span class="s0">or </span><span class="s1">os</span><span class="s2">.</span><span class="s1">path</span><span class="s2">.</span><span class="s1">samefile</span><span class="s2">(</span><span class="s1">f1</span><span class="s2">, </span><span class="s1">f2</span><span class="s2">)</span>
+
+<span class="s0">else</span><span class="s2">:</span>
+
+    <span class="s0">def </span><span class="s1">_is_same</span><span class="s2">(</span><span class="s1">f1</span><span class="s2">: </span><span class="s1">str</span><span class="s2">, </span><span class="s1">f2</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; bool</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">os</span><span class="s2">.</span><span class="s1">path</span><span class="s2">.</span><span class="s1">samefile</span><span class="s2">(</span><span class="s1">f1</span><span class="s2">, </span><span class="s1">f2</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">module_name_from_path</span><span class="s2">(</span><span class="s1">path</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">, </span><span class="s1">root</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">) </span><span class="s1">-&gt; str</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot; 
+    Return a dotted module name based on the given path, anchored on root. 
+ 
+    For example: path=&quot;projects/src/tests/test_foo.py&quot; and root=&quot;/projects&quot;, the 
+    resulting module name will be &quot;src.tests.test_foo&quot;. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">path </span><span class="s2">= </span><span class="s1">path</span><span class="s2">.</span><span class="s1">with_suffix</span><span class="s2">(</span><span class="s4">&quot;&quot;</span><span class="s2">)</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s1">relative_path </span><span class="s2">= </span><span class="s1">path</span><span class="s2">.</span><span class="s1">relative_to</span><span class="s2">(</span><span class="s1">root</span><span class="s2">)</span>
+    <span class="s0">except </span><span class="s1">ValueError</span><span class="s2">:</span>
+        <span class="s5"># If we can't get a relative path to root, use the full path, except</span>
+        <span class="s5"># for the first part (&quot;d:\\&quot; or &quot;/&quot; depending on the platform, for example).</span>
+        <span class="s1">path_parts </span><span class="s2">= </span><span class="s1">path</span><span class="s2">.</span><span class="s1">parts</span><span class="s2">[</span><span class="s3">1</span><span class="s2">:]</span>
+    <span class="s0">else</span><span class="s2">:</span>
+        <span class="s5"># Use the parts for the relative path to the root path.</span>
+        <span class="s1">path_parts </span><span class="s2">= </span><span class="s1">relative_path</span><span class="s2">.</span><span class="s1">parts</span>
+
+    <span class="s5"># Module name for packages do not contain the __init__ file.</span>
+    <span class="s0">if </span><span class="s1">path_parts</span><span class="s2">[-</span><span class="s3">1</span><span class="s2">] == </span><span class="s4">&quot;__init__&quot;</span><span class="s2">:</span>
+        <span class="s1">path_parts </span><span class="s2">= </span><span class="s1">path_parts</span><span class="s2">[:-</span><span class="s3">1</span><span class="s2">]</span>
+
+    <span class="s0">return </span><span class="s4">&quot;.&quot;</span><span class="s2">.</span><span class="s1">join</span><span class="s2">(</span><span class="s1">path_parts</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">insert_missing_modules</span><span class="s2">(</span><span class="s1">modules</span><span class="s2">: </span><span class="s1">Dict</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s1">ModuleType</span><span class="s2">], </span><span class="s1">module_name</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot; 
+    Used by ``import_path`` to create intermediate modules when using mode=importlib. 
+ 
+    When we want to import a module as &quot;src.tests.test_foo&quot; for example, we need 
+    to create empty modules &quot;src&quot; and &quot;src.tests&quot; after inserting &quot;src.tests.test_foo&quot;, 
+    otherwise &quot;src.tests.test_foo&quot; is not importable by ``__import__``. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">module_parts </span><span class="s2">= </span><span class="s1">module_name</span><span class="s2">.</span><span class="s1">split</span><span class="s2">(</span><span class="s4">&quot;.&quot;</span><span class="s2">)</span>
+    <span class="s1">child_module</span><span class="s2">: </span><span class="s1">Union</span><span class="s2">[</span><span class="s1">ModuleType</span><span class="s2">, </span><span class="s0">None</span><span class="s2">] = </span><span class="s0">None</span>
+    <span class="s1">module</span><span class="s2">: </span><span class="s1">Union</span><span class="s2">[</span><span class="s1">ModuleType</span><span class="s2">, </span><span class="s0">None</span><span class="s2">] = </span><span class="s0">None</span>
+    <span class="s1">child_name</span><span class="s2">: </span><span class="s1">str </span><span class="s2">= </span><span class="s4">&quot;&quot;</span>
+    <span class="s0">while </span><span class="s1">module_name</span><span class="s2">:</span>
+        <span class="s0">if </span><span class="s1">module_name </span><span class="s0">not in </span><span class="s1">modules</span><span class="s2">:</span>
+            <span class="s0">try</span><span class="s2">:</span>
+                <span class="s5"># If sys.meta_path is empty, calling import_module will issue</span>
+                <span class="s5"># a warning and raise ModuleNotFoundError. To avoid the</span>
+                <span class="s5"># warning, we check sys.meta_path explicitly and raise the error</span>
+                <span class="s5"># ourselves to fall back to creating a dummy module.</span>
+                <span class="s0">if not </span><span class="s1">sys</span><span class="s2">.</span><span class="s1">meta_path</span><span class="s2">:</span>
+                    <span class="s0">raise </span><span class="s1">ModuleNotFoundError</span>
+                <span class="s1">module </span><span class="s2">= </span><span class="s1">importlib</span><span class="s2">.</span><span class="s1">import_module</span><span class="s2">(</span><span class="s1">module_name</span><span class="s2">)</span>
+            <span class="s0">except </span><span class="s1">ModuleNotFoundError</span><span class="s2">:</span>
+                <span class="s1">module </span><span class="s2">= </span><span class="s1">ModuleType</span><span class="s2">(</span>
+                    <span class="s1">module_name</span><span class="s2">,</span>
+                    <span class="s1">doc</span><span class="s2">=</span><span class="s4">&quot;Empty module created by pytest's importmode=importlib.&quot;</span><span class="s2">,</span>
+                <span class="s2">)</span>
+        <span class="s0">else</span><span class="s2">:</span>
+            <span class="s1">module </span><span class="s2">= </span><span class="s1">modules</span><span class="s2">[</span><span class="s1">module_name</span><span class="s2">]</span>
+        <span class="s0">if </span><span class="s1">child_module</span><span class="s2">:</span>
+            <span class="s5"># Add child attribute to the parent that can reference the child</span>
+            <span class="s5"># modules.</span>
+            <span class="s0">if not </span><span class="s1">hasattr</span><span class="s2">(</span><span class="s1">module</span><span class="s2">, </span><span class="s1">child_name</span><span class="s2">):</span>
+                <span class="s1">setattr</span><span class="s2">(</span><span class="s1">module</span><span class="s2">, </span><span class="s1">child_name</span><span class="s2">, </span><span class="s1">child_module</span><span class="s2">)</span>
+                <span class="s1">modules</span><span class="s2">[</span><span class="s1">module_name</span><span class="s2">] = </span><span class="s1">module</span>
+        <span class="s5"># Keep track of the child module while moving up the tree.</span>
+        <span class="s1">child_module</span><span class="s2">, </span><span class="s1">child_name </span><span class="s2">= </span><span class="s1">module</span><span class="s2">, </span><span class="s1">module_name</span><span class="s2">.</span><span class="s1">rpartition</span><span class="s2">(</span><span class="s4">&quot;.&quot;</span><span class="s2">)[-</span><span class="s3">1</span><span class="s2">]</span>
+        <span class="s1">module_parts</span><span class="s2">.</span><span class="s1">pop</span><span class="s2">(-</span><span class="s3">1</span><span class="s2">)</span>
+        <span class="s1">module_name </span><span class="s2">= </span><span class="s4">&quot;.&quot;</span><span class="s2">.</span><span class="s1">join</span><span class="s2">(</span><span class="s1">module_parts</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">resolve_package_path</span><span class="s2">(</span><span class="s1">path</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">) </span><span class="s1">-&gt; Optional</span><span class="s2">[</span><span class="s1">Path</span><span class="s2">]:</span>
+    <span class="s6">&quot;&quot;&quot;Return the Python package path by looking for the last 
+    directory upwards which still contains an __init__.py. 
+ 
+    Returns None if it can not be determined. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">result </span><span class="s2">= </span><span class="s0">None</span>
+    <span class="s0">for </span><span class="s1">parent </span><span class="s0">in </span><span class="s1">itertools</span><span class="s2">.</span><span class="s1">chain</span><span class="s2">((</span><span class="s1">path</span><span class="s2">,), </span><span class="s1">path</span><span class="s2">.</span><span class="s1">parents</span><span class="s2">):</span>
+        <span class="s0">if </span><span class="s1">parent</span><span class="s2">.</span><span class="s1">is_dir</span><span class="s2">():</span>
+            <span class="s0">if not </span><span class="s1">parent</span><span class="s2">.</span><span class="s1">joinpath</span><span class="s2">(</span><span class="s4">&quot;__init__.py&quot;</span><span class="s2">).</span><span class="s1">is_file</span><span class="s2">():</span>
+                <span class="s0">break</span>
+            <span class="s0">if not </span><span class="s1">parent</span><span class="s2">.</span><span class="s1">name</span><span class="s2">.</span><span class="s1">isidentifier</span><span class="s2">():</span>
+                <span class="s0">break</span>
+            <span class="s1">result </span><span class="s2">= </span><span class="s1">parent</span>
+    <span class="s0">return </span><span class="s1">result</span>
+
+
+<span class="s0">def </span><span class="s1">scandir</span><span class="s2">(</span><span class="s1">path</span><span class="s2">: </span><span class="s1">Union</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s4">&quot;os.PathLike[str]&quot;</span><span class="s2">]) </span><span class="s1">-&gt; List</span><span class="s2">[</span><span class="s4">&quot;os.DirEntry[str]&quot;</span><span class="s2">]:</span>
+    <span class="s6">&quot;&quot;&quot;Scan a directory recursively, in breadth-first order. 
+ 
+    The returned entries are sorted. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">entries </span><span class="s2">= []</span>
+    <span class="s0">with </span><span class="s1">os</span><span class="s2">.</span><span class="s1">scandir</span><span class="s2">(</span><span class="s1">path</span><span class="s2">) </span><span class="s0">as </span><span class="s1">s</span><span class="s2">:</span>
+        <span class="s5"># Skip entries with symlink loops and other brokenness, so the caller</span>
+        <span class="s5"># doesn't have to deal with it.</span>
+        <span class="s0">for </span><span class="s1">entry </span><span class="s0">in </span><span class="s1">s</span><span class="s2">:</span>
+            <span class="s0">try</span><span class="s2">:</span>
+                <span class="s1">entry</span><span class="s2">.</span><span class="s1">is_file</span><span class="s2">()</span>
+            <span class="s0">except </span><span class="s1">OSError </span><span class="s0">as </span><span class="s1">err</span><span class="s2">:</span>
+                <span class="s0">if </span><span class="s1">_ignore_error</span><span class="s2">(</span><span class="s1">err</span><span class="s2">):</span>
+                    <span class="s0">continue</span>
+                <span class="s0">raise</span>
+            <span class="s1">entries</span><span class="s2">.</span><span class="s1">append</span><span class="s2">(</span><span class="s1">entry</span><span class="s2">)</span>
+    <span class="s1">entries</span><span class="s2">.</span><span class="s1">sort</span><span class="s2">(</span><span class="s1">key</span><span class="s2">=</span><span class="s0">lambda </span><span class="s1">entry</span><span class="s2">: </span><span class="s1">entry</span><span class="s2">.</span><span class="s1">name</span><span class="s2">)</span>
+    <span class="s0">return </span><span class="s1">entries</span>
+
+
+<span class="s0">def </span><span class="s1">visit</span><span class="s2">(</span>
+    <span class="s1">path</span><span class="s2">: </span><span class="s1">Union</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s4">&quot;os.PathLike[str]&quot;</span><span class="s2">], </span><span class="s1">recurse</span><span class="s2">: </span><span class="s1">Callable</span><span class="s2">[[</span><span class="s4">&quot;os.DirEntry[str]&quot;</span><span class="s2">], </span><span class="s1">bool</span><span class="s2">]</span>
+<span class="s2">) </span><span class="s1">-&gt; Iterator</span><span class="s2">[</span><span class="s4">&quot;os.DirEntry[str]&quot;</span><span class="s2">]:</span>
+    <span class="s6">&quot;&quot;&quot;Walk a directory recursively, in breadth-first order. 
+ 
+    The `recurse` predicate determines whether a directory is recursed. 
+ 
+    Entries at each directory level are sorted. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">entries </span><span class="s2">= </span><span class="s1">scandir</span><span class="s2">(</span><span class="s1">path</span><span class="s2">)</span>
+    <span class="s0">yield from </span><span class="s1">entries</span>
+    <span class="s0">for </span><span class="s1">entry </span><span class="s0">in </span><span class="s1">entries</span><span class="s2">:</span>
+        <span class="s0">if </span><span class="s1">entry</span><span class="s2">.</span><span class="s1">is_dir</span><span class="s2">() </span><span class="s0">and </span><span class="s1">recurse</span><span class="s2">(</span><span class="s1">entry</span><span class="s2">):</span>
+            <span class="s0">yield from </span><span class="s1">visit</span><span class="s2">(</span><span class="s1">entry</span><span class="s2">.</span><span class="s1">path</span><span class="s2">, </span><span class="s1">recurse</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">absolutepath</span><span class="s2">(</span><span class="s1">path</span><span class="s2">: </span><span class="s1">Union</span><span class="s2">[</span><span class="s1">Path</span><span class="s2">, </span><span class="s1">str</span><span class="s2">]) </span><span class="s1">-&gt; Path</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;Convert a path to an absolute path using os.path.abspath. 
+ 
+    Prefer this over Path.resolve() (see #6523). 
+    Prefer this over Path.absolute() (not public, doesn't normalize). 
+    &quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">Path</span><span class="s2">(</span><span class="s1">os</span><span class="s2">.</span><span class="s1">path</span><span class="s2">.</span><span class="s1">abspath</span><span class="s2">(</span><span class="s1">str</span><span class="s2">(</span><span class="s1">path</span><span class="s2">)))</span>
+
+
+<span class="s0">def </span><span class="s1">commonpath</span><span class="s2">(</span><span class="s1">path1</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">, </span><span class="s1">path2</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">) </span><span class="s1">-&gt; Optional</span><span class="s2">[</span><span class="s1">Path</span><span class="s2">]:</span>
+    <span class="s6">&quot;&quot;&quot;Return the common part shared with the other path, or None if there is 
+    no common part. 
+ 
+    If one path is relative and one is absolute, returns None. 
+    &quot;&quot;&quot;</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">Path</span><span class="s2">(</span><span class="s1">os</span><span class="s2">.</span><span class="s1">path</span><span class="s2">.</span><span class="s1">commonpath</span><span class="s2">((</span><span class="s1">str</span><span class="s2">(</span><span class="s1">path1</span><span class="s2">), </span><span class="s1">str</span><span class="s2">(</span><span class="s1">path2</span><span class="s2">))))</span>
+    <span class="s0">except </span><span class="s1">ValueError</span><span class="s2">:</span>
+        <span class="s0">return None</span>
+
+
+<span class="s0">def </span><span class="s1">bestrelpath</span><span class="s2">(</span><span class="s1">directory</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">, </span><span class="s1">dest</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">) </span><span class="s1">-&gt; str</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;Return a string which is a relative path from directory to dest such 
+    that directory/bestrelpath == dest. 
+ 
+    The paths must be either both absolute or both relative. 
+ 
+    If no such path can be determined, returns dest. 
+    &quot;&quot;&quot;</span>
+    <span class="s0">assert </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">directory</span><span class="s2">, </span><span class="s1">Path</span><span class="s2">)</span>
+    <span class="s0">assert </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">dest</span><span class="s2">, </span><span class="s1">Path</span><span class="s2">)</span>
+    <span class="s0">if </span><span class="s1">dest </span><span class="s2">== </span><span class="s1">directory</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">os</span><span class="s2">.</span><span class="s1">curdir</span>
+    <span class="s5"># Find the longest common directory.</span>
+    <span class="s1">base </span><span class="s2">= </span><span class="s1">commonpath</span><span class="s2">(</span><span class="s1">directory</span><span class="s2">, </span><span class="s1">dest</span><span class="s2">)</span>
+    <span class="s5"># Can be the case on Windows for two absolute paths on different drives.</span>
+    <span class="s5"># Can be the case for two relative paths without common prefix.</span>
+    <span class="s5"># Can be the case for a relative path and an absolute path.</span>
+    <span class="s0">if not </span><span class="s1">base</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">str</span><span class="s2">(</span><span class="s1">dest</span><span class="s2">)</span>
+    <span class="s1">reldirectory </span><span class="s2">= </span><span class="s1">directory</span><span class="s2">.</span><span class="s1">relative_to</span><span class="s2">(</span><span class="s1">base</span><span class="s2">)</span>
+    <span class="s1">reldest </span><span class="s2">= </span><span class="s1">dest</span><span class="s2">.</span><span class="s1">relative_to</span><span class="s2">(</span><span class="s1">base</span><span class="s2">)</span>
+    <span class="s0">return </span><span class="s1">os</span><span class="s2">.</span><span class="s1">path</span><span class="s2">.</span><span class="s1">join</span><span class="s2">(</span>
+        <span class="s5"># Back from directory to base.</span>
+        <span class="s2">*([</span><span class="s1">os</span><span class="s2">.</span><span class="s1">pardir</span><span class="s2">] * </span><span class="s1">len</span><span class="s2">(</span><span class="s1">reldirectory</span><span class="s2">.</span><span class="s1">parts</span><span class="s2">)),</span>
+        <span class="s5"># Forward from base to dest.</span>
+        <span class="s2">*</span><span class="s1">reldest</span><span class="s2">.</span><span class="s1">parts</span><span class="s2">,</span>
+    <span class="s2">)</span>
+
+
+<span class="s5"># Originates from py. path.local.copy(), with siginficant trims and adjustments.</span>
+<span class="s5"># TODO(py38): Replace with shutil.copytree(..., symlinks=True, dirs_exist_ok=True)</span>
+<span class="s0">def </span><span class="s1">copytree</span><span class="s2">(</span><span class="s1">source</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">, </span><span class="s1">target</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;Recursively copy a source directory to target.&quot;&quot;&quot;</span>
+    <span class="s0">assert </span><span class="s1">source</span><span class="s2">.</span><span class="s1">is_dir</span><span class="s2">()</span>
+    <span class="s0">for </span><span class="s1">entry </span><span class="s0">in </span><span class="s1">visit</span><span class="s2">(</span><span class="s1">source</span><span class="s2">, </span><span class="s1">recurse</span><span class="s2">=</span><span class="s0">lambda </span><span class="s1">entry</span><span class="s2">: </span><span class="s0">not </span><span class="s1">entry</span><span class="s2">.</span><span class="s1">is_symlink</span><span class="s2">()):</span>
+        <span class="s1">x </span><span class="s2">= </span><span class="s1">Path</span><span class="s2">(</span><span class="s1">entry</span><span class="s2">)</span>
+        <span class="s1">relpath </span><span class="s2">= </span><span class="s1">x</span><span class="s2">.</span><span class="s1">relative_to</span><span class="s2">(</span><span class="s1">source</span><span class="s2">)</span>
+        <span class="s1">newx </span><span class="s2">= </span><span class="s1">target </span><span class="s2">/ </span><span class="s1">relpath</span>
+        <span class="s1">newx</span><span class="s2">.</span><span class="s1">parent</span><span class="s2">.</span><span class="s1">mkdir</span><span class="s2">(</span><span class="s1">exist_ok</span><span class="s2">=</span><span class="s0">True</span><span class="s2">)</span>
+        <span class="s0">if </span><span class="s1">x</span><span class="s2">.</span><span class="s1">is_symlink</span><span class="s2">():</span>
+            <span class="s1">newx</span><span class="s2">.</span><span class="s1">symlink_to</span><span class="s2">(</span><span class="s1">os</span><span class="s2">.</span><span class="s1">readlink</span><span class="s2">(</span><span class="s1">x</span><span class="s2">))</span>
+        <span class="s0">elif </span><span class="s1">x</span><span class="s2">.</span><span class="s1">is_file</span><span class="s2">():</span>
+            <span class="s1">shutil</span><span class="s2">.</span><span class="s1">copyfile</span><span class="s2">(</span><span class="s1">x</span><span class="s2">, </span><span class="s1">newx</span><span class="s2">)</span>
+        <span class="s0">elif </span><span class="s1">x</span><span class="s2">.</span><span class="s1">is_dir</span><span class="s2">():</span>
+            <span class="s1">newx</span><span class="s2">.</span><span class="s1">mkdir</span><span class="s2">(</span><span class="s1">exist_ok</span><span class="s2">=</span><span class="s0">True</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">safe_exists</span><span class="s2">(</span><span class="s1">p</span><span class="s2">: </span><span class="s1">Path</span><span class="s2">) </span><span class="s1">-&gt; bool</span><span class="s2">:</span>
+    <span class="s6">&quot;&quot;&quot;Like Path.exists(), but account for input arguments that might be too long (#11394).&quot;&quot;&quot;</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">p</span><span class="s2">.</span><span class="s1">exists</span><span class="s2">()</span>
+    <span class="s0">except </span><span class="s2">(</span><span class="s1">ValueError</span><span class="s2">, </span><span class="s1">OSError</span><span class="s2">):</span>
+        <span class="s5"># ValueError: stat: path too long for Windows</span>
+        <span class="s5"># OSError: [WinError 123] The filename, directory name, or volume label syntax is incorrect</span>
+        <span class="s0">return False</span>
+</pre>
+</body>
+</html>

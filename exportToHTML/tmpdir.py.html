@@ -1,0 +1,347 @@
+<html>
+<head>
+<title>tmpdir.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5f826b; font-style: italic;}
+.s1 { color: #bcbec4;}
+.s2 { color: #cf8e6d;}
+.s3 { color: #bcbec4;}
+.s4 { color: #6aab73;}
+.s5 { color: #7a7e85;}
+.s6 { color: #2aacb8;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+tmpdir.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot;Support for providing temporary directories to test functions.&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">dataclasses</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">re</span>
+<span class="s2">import </span><span class="s1">tempfile</span>
+<span class="s2">from </span><span class="s1">pathlib </span><span class="s2">import </span><span class="s1">Path</span>
+<span class="s2">from </span><span class="s1">shutil </span><span class="s2">import </span><span class="s1">rmtree</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Any</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Dict</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Generator</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Optional</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">TYPE_CHECKING</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Union</span>
+
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">nodes </span><span class="s2">import </span><span class="s1">Item</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">reports </span><span class="s2">import </span><span class="s1">CollectReport</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">stash </span><span class="s2">import </span><span class="s1">StashKey</span>
+
+<span class="s2">if </span><span class="s1">TYPE_CHECKING</span><span class="s3">:</span>
+    <span class="s2">from </span><span class="s1">typing_extensions </span><span class="s2">import </span><span class="s1">Literal</span>
+
+    <span class="s1">RetentionType </span><span class="s3">= </span><span class="s1">Literal</span><span class="s3">[</span><span class="s4">&quot;all&quot;</span><span class="s3">, </span><span class="s4">&quot;failed&quot;</span><span class="s3">, </span><span class="s4">&quot;none&quot;</span><span class="s3">]</span>
+
+
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">config</span><span class="s3">.</span><span class="s1">argparsing </span><span class="s2">import </span><span class="s1">Parser</span>
+
+<span class="s2">from </span><span class="s3">.</span><span class="s1">pathlib </span><span class="s2">import </span><span class="s1">LOCK_TIMEOUT</span>
+<span class="s2">from </span><span class="s3">.</span><span class="s1">pathlib </span><span class="s2">import </span><span class="s1">make_numbered_dir</span>
+<span class="s2">from </span><span class="s3">.</span><span class="s1">pathlib </span><span class="s2">import </span><span class="s1">make_numbered_dir_with_cleanup</span>
+<span class="s2">from </span><span class="s3">.</span><span class="s1">pathlib </span><span class="s2">import </span><span class="s1">rm_rf</span>
+<span class="s2">from </span><span class="s3">.</span><span class="s1">pathlib </span><span class="s2">import </span><span class="s1">cleanup_dead_symlinks</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">compat </span><span class="s2">import </span><span class="s1">final</span><span class="s3">, </span><span class="s1">get_user_id</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">config </span><span class="s2">import </span><span class="s1">Config</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">config </span><span class="s2">import </span><span class="s1">ExitCode</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">config </span><span class="s2">import </span><span class="s1">hookimpl</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">deprecated </span><span class="s2">import </span><span class="s1">check_ispytest</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">fixtures </span><span class="s2">import </span><span class="s1">fixture</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">fixtures </span><span class="s2">import </span><span class="s1">FixtureRequest</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">monkeypatch </span><span class="s2">import </span><span class="s1">MonkeyPatch</span>
+
+<span class="s1">tmppath_result_key </span><span class="s3">= </span><span class="s1">StashKey</span><span class="s3">[</span><span class="s1">Dict</span><span class="s3">[</span><span class="s1">str</span><span class="s3">, </span><span class="s1">bool</span><span class="s3">]]()</span>
+
+
+<span class="s3">@</span><span class="s1">final</span>
+<span class="s3">@</span><span class="s1">dataclasses</span><span class="s3">.</span><span class="s1">dataclass</span>
+<span class="s2">class </span><span class="s1">TempPathFactory</span><span class="s3">:</span>
+    <span class="s0">&quot;&quot;&quot;Factory for temporary directories under the common base temp directory. 
+ 
+    The base directory can be configured using the ``--basetemp`` option. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">_given_basetemp</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">Path</span><span class="s3">]</span>
+    <span class="s5"># pluggy TagTracerSub, not currently exposed, so Any.</span>
+    <span class="s1">_trace</span><span class="s3">: </span><span class="s1">Any</span>
+    <span class="s1">_basetemp</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">Path</span><span class="s3">]</span>
+    <span class="s1">_retention_count</span><span class="s3">: </span><span class="s1">int</span>
+    <span class="s1">_retention_policy</span><span class="s3">: </span><span class="s4">&quot;RetentionType&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__</span><span class="s3">(</span>
+        <span class="s1">self</span><span class="s3">,</span>
+        <span class="s1">given_basetemp</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">Path</span><span class="s3">],</span>
+        <span class="s1">retention_count</span><span class="s3">: </span><span class="s1">int</span><span class="s3">,</span>
+        <span class="s1">retention_policy</span><span class="s3">: </span><span class="s4">&quot;RetentionType&quot;</span><span class="s3">,</span>
+        <span class="s1">trace</span><span class="s3">,</span>
+        <span class="s1">basetemp</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">Path</span><span class="s3">] = </span><span class="s2">None</span><span class="s3">,</span>
+        <span class="s3">*,</span>
+        <span class="s1">_ispytest</span><span class="s3">: </span><span class="s1">bool </span><span class="s3">= </span><span class="s2">False</span><span class="s3">,</span>
+    <span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">check_ispytest</span><span class="s3">(</span><span class="s1">_ispytest</span><span class="s3">)</span>
+        <span class="s2">if </span><span class="s1">given_basetemp </span><span class="s2">is None</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_given_basetemp </span><span class="s3">= </span><span class="s2">None</span>
+        <span class="s2">else</span><span class="s3">:</span>
+            <span class="s5"># Use os.path.abspath() to get absolute path instead of resolve() as it</span>
+            <span class="s5"># does not work the same in all platforms (see #4427).</span>
+            <span class="s5"># Path.absolute() exists, but it is not public (see https://bugs.python.org/issue25012).</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_given_basetemp </span><span class="s3">= </span><span class="s1">Path</span><span class="s3">(</span><span class="s1">os</span><span class="s3">.</span><span class="s1">path</span><span class="s3">.</span><span class="s1">abspath</span><span class="s3">(</span><span class="s1">str</span><span class="s3">(</span><span class="s1">given_basetemp</span><span class="s3">)))</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_trace </span><span class="s3">= </span><span class="s1">trace</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_retention_count </span><span class="s3">= </span><span class="s1">retention_count</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_retention_policy </span><span class="s3">= </span><span class="s1">retention_policy</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_basetemp </span><span class="s3">= </span><span class="s1">basetemp</span>
+
+    <span class="s3">@</span><span class="s1">classmethod</span>
+    <span class="s2">def </span><span class="s1">from_config</span><span class="s3">(</span>
+        <span class="s1">cls</span><span class="s3">,</span>
+        <span class="s1">config</span><span class="s3">: </span><span class="s1">Config</span><span class="s3">,</span>
+        <span class="s3">*,</span>
+        <span class="s1">_ispytest</span><span class="s3">: </span><span class="s1">bool </span><span class="s3">= </span><span class="s2">False</span><span class="s3">,</span>
+    <span class="s3">) </span><span class="s1">-&gt; </span><span class="s4">&quot;TempPathFactory&quot;</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Create a factory according to pytest configuration. 
+ 
+        :meta private: 
+        &quot;&quot;&quot;</span>
+        <span class="s1">check_ispytest</span><span class="s3">(</span><span class="s1">_ispytest</span><span class="s3">)</span>
+        <span class="s1">count </span><span class="s3">= </span><span class="s1">int</span><span class="s3">(</span><span class="s1">config</span><span class="s3">.</span><span class="s1">getini</span><span class="s3">(</span><span class="s4">&quot;tmp_path_retention_count&quot;</span><span class="s3">))</span>
+        <span class="s2">if </span><span class="s1">count </span><span class="s3">&lt; </span><span class="s6">0</span><span class="s3">:</span>
+            <span class="s2">raise </span><span class="s1">ValueError</span><span class="s3">(</span>
+                <span class="s4">f&quot;tmp_path_retention_count must be &gt;= 0. Current input: </span><span class="s2">{</span><span class="s1">count</span><span class="s2">}</span><span class="s4">.&quot;</span>
+            <span class="s3">)</span>
+
+        <span class="s1">policy </span><span class="s3">= </span><span class="s1">config</span><span class="s3">.</span><span class="s1">getini</span><span class="s3">(</span><span class="s4">&quot;tmp_path_retention_policy&quot;</span><span class="s3">)</span>
+        <span class="s2">if </span><span class="s1">policy </span><span class="s2">not in </span><span class="s3">(</span><span class="s4">&quot;all&quot;</span><span class="s3">, </span><span class="s4">&quot;failed&quot;</span><span class="s3">, </span><span class="s4">&quot;none&quot;</span><span class="s3">):</span>
+            <span class="s2">raise </span><span class="s1">ValueError</span><span class="s3">(</span>
+                <span class="s4">f&quot;tmp_path_retention_policy must be either all, failed, none. Current input: </span><span class="s2">{</span><span class="s1">policy</span><span class="s2">}</span><span class="s4">.&quot;</span>
+            <span class="s3">)</span>
+
+        <span class="s2">return </span><span class="s1">cls</span><span class="s3">(</span>
+            <span class="s1">given_basetemp</span><span class="s3">=</span><span class="s1">config</span><span class="s3">.</span><span class="s1">option</span><span class="s3">.</span><span class="s1">basetemp</span><span class="s3">,</span>
+            <span class="s1">trace</span><span class="s3">=</span><span class="s1">config</span><span class="s3">.</span><span class="s1">trace</span><span class="s3">.</span><span class="s1">get</span><span class="s3">(</span><span class="s4">&quot;tmpdir&quot;</span><span class="s3">),</span>
+            <span class="s1">retention_count</span><span class="s3">=</span><span class="s1">count</span><span class="s3">,</span>
+            <span class="s1">retention_policy</span><span class="s3">=</span><span class="s1">policy</span><span class="s3">,</span>
+            <span class="s1">_ispytest</span><span class="s3">=</span><span class="s2">True</span><span class="s3">,</span>
+        <span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">_ensure_relative_to_basetemp</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">basename</span><span class="s3">: </span><span class="s1">str</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+        <span class="s1">basename </span><span class="s3">= </span><span class="s1">os</span><span class="s3">.</span><span class="s1">path</span><span class="s3">.</span><span class="s1">normpath</span><span class="s3">(</span><span class="s1">basename</span><span class="s3">)</span>
+        <span class="s2">if </span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">getbasetemp</span><span class="s3">() / </span><span class="s1">basename</span><span class="s3">).</span><span class="s1">resolve</span><span class="s3">().</span><span class="s1">parent </span><span class="s3">!= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">getbasetemp</span><span class="s3">():</span>
+            <span class="s2">raise </span><span class="s1">ValueError</span><span class="s3">(</span><span class="s4">f&quot;</span><span class="s2">{</span><span class="s1">basename</span><span class="s2">} </span><span class="s4">is not a normalized and relative path&quot;</span><span class="s3">)</span>
+        <span class="s2">return </span><span class="s1">basename</span>
+
+    <span class="s2">def </span><span class="s1">mktemp</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">basename</span><span class="s3">: </span><span class="s1">str</span><span class="s3">, </span><span class="s1">numbered</span><span class="s3">: </span><span class="s1">bool </span><span class="s3">= </span><span class="s2">True</span><span class="s3">) </span><span class="s1">-&gt; Path</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Create a new temporary directory managed by the factory. 
+ 
+        :param basename: 
+            Directory base name, must be a relative path. 
+ 
+        :param numbered: 
+            If ``True``, ensure the directory is unique by adding a numbered 
+            suffix greater than any existing one: ``basename=&quot;foo-&quot;`` and ``numbered=True`` 
+            means that this function will create directories named ``&quot;foo-0&quot;``, 
+            ``&quot;foo-1&quot;``, ``&quot;foo-2&quot;`` and so on. 
+ 
+        :returns: 
+            The path to the new directory. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">basename </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_ensure_relative_to_basetemp</span><span class="s3">(</span><span class="s1">basename</span><span class="s3">)</span>
+        <span class="s2">if not </span><span class="s1">numbered</span><span class="s3">:</span>
+            <span class="s1">p </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">getbasetemp</span><span class="s3">().</span><span class="s1">joinpath</span><span class="s3">(</span><span class="s1">basename</span><span class="s3">)</span>
+            <span class="s1">p</span><span class="s3">.</span><span class="s1">mkdir</span><span class="s3">(</span><span class="s1">mode</span><span class="s3">=</span><span class="s6">0o700</span><span class="s3">)</span>
+        <span class="s2">else</span><span class="s3">:</span>
+            <span class="s1">p </span><span class="s3">= </span><span class="s1">make_numbered_dir</span><span class="s3">(</span><span class="s1">root</span><span class="s3">=</span><span class="s1">self</span><span class="s3">.</span><span class="s1">getbasetemp</span><span class="s3">(), </span><span class="s1">prefix</span><span class="s3">=</span><span class="s1">basename</span><span class="s3">, </span><span class="s1">mode</span><span class="s3">=</span><span class="s6">0o700</span><span class="s3">)</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_trace</span><span class="s3">(</span><span class="s4">&quot;mktemp&quot;</span><span class="s3">, </span><span class="s1">p</span><span class="s3">)</span>
+        <span class="s2">return </span><span class="s1">p</span>
+
+    <span class="s2">def </span><span class="s1">getbasetemp</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; Path</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Return the base temporary directory, creating it if needed. 
+ 
+        :returns: 
+            The base temporary directory. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_basetemp </span><span class="s2">is not None</span><span class="s3">:</span>
+            <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_basetemp</span>
+
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_given_basetemp </span><span class="s2">is not None</span><span class="s3">:</span>
+            <span class="s1">basetemp </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_given_basetemp</span>
+            <span class="s2">if </span><span class="s1">basetemp</span><span class="s3">.</span><span class="s1">exists</span><span class="s3">():</span>
+                <span class="s1">rm_rf</span><span class="s3">(</span><span class="s1">basetemp</span><span class="s3">)</span>
+            <span class="s1">basetemp</span><span class="s3">.</span><span class="s1">mkdir</span><span class="s3">(</span><span class="s1">mode</span><span class="s3">=</span><span class="s6">0o700</span><span class="s3">)</span>
+            <span class="s1">basetemp </span><span class="s3">= </span><span class="s1">basetemp</span><span class="s3">.</span><span class="s1">resolve</span><span class="s3">()</span>
+        <span class="s2">else</span><span class="s3">:</span>
+            <span class="s1">from_env </span><span class="s3">= </span><span class="s1">os</span><span class="s3">.</span><span class="s1">environ</span><span class="s3">.</span><span class="s1">get</span><span class="s3">(</span><span class="s4">&quot;PYTEST_DEBUG_TEMPROOT&quot;</span><span class="s3">)</span>
+            <span class="s1">temproot </span><span class="s3">= </span><span class="s1">Path</span><span class="s3">(</span><span class="s1">from_env </span><span class="s2">or </span><span class="s1">tempfile</span><span class="s3">.</span><span class="s1">gettempdir</span><span class="s3">()).</span><span class="s1">resolve</span><span class="s3">()</span>
+            <span class="s1">user </span><span class="s3">= </span><span class="s1">get_user</span><span class="s3">() </span><span class="s2">or </span><span class="s4">&quot;unknown&quot;</span>
+            <span class="s5"># use a sub-directory in the temproot to speed-up</span>
+            <span class="s5"># make_numbered_dir() call</span>
+            <span class="s1">rootdir </span><span class="s3">= </span><span class="s1">temproot</span><span class="s3">.</span><span class="s1">joinpath</span><span class="s3">(</span><span class="s4">f&quot;pytest-of-</span><span class="s2">{</span><span class="s1">user</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s3">)</span>
+            <span class="s2">try</span><span class="s3">:</span>
+                <span class="s1">rootdir</span><span class="s3">.</span><span class="s1">mkdir</span><span class="s3">(</span><span class="s1">mode</span><span class="s3">=</span><span class="s6">0o700</span><span class="s3">, </span><span class="s1">exist_ok</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+            <span class="s2">except </span><span class="s1">OSError</span><span class="s3">:</span>
+                <span class="s5"># getuser() likely returned illegal characters for the platform, use unknown back off mechanism</span>
+                <span class="s1">rootdir </span><span class="s3">= </span><span class="s1">temproot</span><span class="s3">.</span><span class="s1">joinpath</span><span class="s3">(</span><span class="s4">&quot;pytest-of-unknown&quot;</span><span class="s3">)</span>
+                <span class="s1">rootdir</span><span class="s3">.</span><span class="s1">mkdir</span><span class="s3">(</span><span class="s1">mode</span><span class="s3">=</span><span class="s6">0o700</span><span class="s3">, </span><span class="s1">exist_ok</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+            <span class="s5"># Because we use exist_ok=True with a predictable name, make sure</span>
+            <span class="s5"># we are the owners, to prevent any funny business (on unix, where</span>
+            <span class="s5"># temproot is usually shared).</span>
+            <span class="s5"># Also, to keep things private, fixup any world-readable temp</span>
+            <span class="s5"># rootdir's permissions. Historically 0o755 was used, so we can't</span>
+            <span class="s5"># just error out on this, at least for a while.</span>
+            <span class="s1">uid </span><span class="s3">= </span><span class="s1">get_user_id</span><span class="s3">()</span>
+            <span class="s2">if </span><span class="s1">uid </span><span class="s2">is not None</span><span class="s3">:</span>
+                <span class="s1">rootdir_stat </span><span class="s3">= </span><span class="s1">rootdir</span><span class="s3">.</span><span class="s1">stat</span><span class="s3">()</span>
+                <span class="s2">if </span><span class="s1">rootdir_stat</span><span class="s3">.</span><span class="s1">st_uid </span><span class="s3">!= </span><span class="s1">uid</span><span class="s3">:</span>
+                    <span class="s2">raise </span><span class="s1">OSError</span><span class="s3">(</span>
+                        <span class="s4">f&quot;The temporary directory </span><span class="s2">{</span><span class="s1">rootdir</span><span class="s2">} </span><span class="s4">is not owned by the current user. &quot;</span>
+                        <span class="s4">&quot;Fix this and try again.&quot;</span>
+                    <span class="s3">)</span>
+                <span class="s2">if </span><span class="s3">(</span><span class="s1">rootdir_stat</span><span class="s3">.</span><span class="s1">st_mode </span><span class="s3">&amp; </span><span class="s6">0o077</span><span class="s3">) != </span><span class="s6">0</span><span class="s3">:</span>
+                    <span class="s1">os</span><span class="s3">.</span><span class="s1">chmod</span><span class="s3">(</span><span class="s1">rootdir</span><span class="s3">, </span><span class="s1">rootdir_stat</span><span class="s3">.</span><span class="s1">st_mode </span><span class="s3">&amp; ~</span><span class="s6">0o077</span><span class="s3">)</span>
+            <span class="s1">keep </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_retention_count</span>
+            <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_retention_policy </span><span class="s3">== </span><span class="s4">&quot;none&quot;</span><span class="s3">:</span>
+                <span class="s1">keep </span><span class="s3">= </span><span class="s6">0</span>
+            <span class="s1">basetemp </span><span class="s3">= </span><span class="s1">make_numbered_dir_with_cleanup</span><span class="s3">(</span>
+                <span class="s1">prefix</span><span class="s3">=</span><span class="s4">&quot;pytest-&quot;</span><span class="s3">,</span>
+                <span class="s1">root</span><span class="s3">=</span><span class="s1">rootdir</span><span class="s3">,</span>
+                <span class="s1">keep</span><span class="s3">=</span><span class="s1">keep</span><span class="s3">,</span>
+                <span class="s1">lock_timeout</span><span class="s3">=</span><span class="s1">LOCK_TIMEOUT</span><span class="s3">,</span>
+                <span class="s1">mode</span><span class="s3">=</span><span class="s6">0o700</span><span class="s3">,</span>
+            <span class="s3">)</span>
+        <span class="s2">assert </span><span class="s1">basetemp </span><span class="s2">is not None</span><span class="s3">, </span><span class="s1">basetemp</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_basetemp </span><span class="s3">= </span><span class="s1">basetemp</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_trace</span><span class="s3">(</span><span class="s4">&quot;new basetemp&quot;</span><span class="s3">, </span><span class="s1">basetemp</span><span class="s3">)</span>
+        <span class="s2">return </span><span class="s1">basetemp</span>
+
+
+<span class="s2">def </span><span class="s1">get_user</span><span class="s3">() </span><span class="s1">-&gt; Optional</span><span class="s3">[</span><span class="s1">str</span><span class="s3">]:</span>
+    <span class="s0">&quot;&quot;&quot;Return the current user name, or None if getuser() does not work 
+    in the current environment (see #1010).&quot;&quot;&quot;</span>
+    <span class="s2">try</span><span class="s3">:</span>
+        <span class="s5"># In some exotic environments, getpass may not be importable.</span>
+        <span class="s2">import </span><span class="s1">getpass</span>
+
+        <span class="s2">return </span><span class="s1">getpass</span><span class="s3">.</span><span class="s1">getuser</span><span class="s3">()</span>
+    <span class="s2">except </span><span class="s3">(</span><span class="s1">ImportError</span><span class="s3">, </span><span class="s1">KeyError</span><span class="s3">):</span>
+        <span class="s2">return None</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_configure</span><span class="s3">(</span><span class="s1">config</span><span class="s3">: </span><span class="s1">Config</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+    <span class="s0">&quot;&quot;&quot;Create a TempPathFactory and attach it to the config object. 
+ 
+    This is to comply with existing plugins which expect the handler to be 
+    available at pytest_configure time, but ideally should be moved entirely 
+    to the tmp_path_factory session fixture. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">mp </span><span class="s3">= </span><span class="s1">MonkeyPatch</span><span class="s3">()</span>
+    <span class="s1">config</span><span class="s3">.</span><span class="s1">add_cleanup</span><span class="s3">(</span><span class="s1">mp</span><span class="s3">.</span><span class="s1">undo</span><span class="s3">)</span>
+    <span class="s1">_tmp_path_factory </span><span class="s3">= </span><span class="s1">TempPathFactory</span><span class="s3">.</span><span class="s1">from_config</span><span class="s3">(</span><span class="s1">config</span><span class="s3">, </span><span class="s1">_ispytest</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+    <span class="s1">mp</span><span class="s3">.</span><span class="s1">setattr</span><span class="s3">(</span><span class="s1">config</span><span class="s3">, </span><span class="s4">&quot;_tmp_path_factory&quot;</span><span class="s3">, </span><span class="s1">_tmp_path_factory</span><span class="s3">, </span><span class="s1">raising</span><span class="s3">=</span><span class="s2">False</span><span class="s3">)</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_addoption</span><span class="s3">(</span><span class="s1">parser</span><span class="s3">: </span><span class="s1">Parser</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+    <span class="s1">parser</span><span class="s3">.</span><span class="s1">addini</span><span class="s3">(</span>
+        <span class="s4">&quot;tmp_path_retention_count&quot;</span><span class="s3">,</span>
+        <span class="s1">help</span><span class="s3">=</span><span class="s4">&quot;How many sessions should we keep the `tmp_path` directories, according to `tmp_path_retention_policy`.&quot;</span><span class="s3">,</span>
+        <span class="s1">default</span><span class="s3">=</span><span class="s6">3</span><span class="s3">,</span>
+    <span class="s3">)</span>
+
+    <span class="s1">parser</span><span class="s3">.</span><span class="s1">addini</span><span class="s3">(</span>
+        <span class="s4">&quot;tmp_path_retention_policy&quot;</span><span class="s3">,</span>
+        <span class="s1">help</span><span class="s3">=</span><span class="s4">&quot;Controls which directories created by the `tmp_path` fixture are kept around, based on test outcome. &quot;</span>
+        <span class="s4">&quot;(all/failed/none)&quot;</span><span class="s3">,</span>
+        <span class="s1">default</span><span class="s3">=</span><span class="s4">&quot;all&quot;</span><span class="s3">,</span>
+    <span class="s3">)</span>
+
+
+<span class="s3">@</span><span class="s1">fixture</span><span class="s3">(</span><span class="s1">scope</span><span class="s3">=</span><span class="s4">&quot;session&quot;</span><span class="s3">)</span>
+<span class="s2">def </span><span class="s1">tmp_path_factory</span><span class="s3">(</span><span class="s1">request</span><span class="s3">: </span><span class="s1">FixtureRequest</span><span class="s3">) </span><span class="s1">-&gt; TempPathFactory</span><span class="s3">:</span>
+    <span class="s0">&quot;&quot;&quot;Return a :class:`pytest.TempPathFactory` instance for the test session.&quot;&quot;&quot;</span>
+    <span class="s5"># Set dynamically by pytest_configure() above.</span>
+    <span class="s2">return </span><span class="s1">request</span><span class="s3">.</span><span class="s1">config</span><span class="s3">.</span><span class="s1">_tmp_path_factory  </span><span class="s5"># type: ignore</span>
+
+
+<span class="s2">def </span><span class="s1">_mk_tmp</span><span class="s3">(</span><span class="s1">request</span><span class="s3">: </span><span class="s1">FixtureRequest</span><span class="s3">, </span><span class="s1">factory</span><span class="s3">: </span><span class="s1">TempPathFactory</span><span class="s3">) </span><span class="s1">-&gt; Path</span><span class="s3">:</span>
+    <span class="s1">name </span><span class="s3">= </span><span class="s1">request</span><span class="s3">.</span><span class="s1">node</span><span class="s3">.</span><span class="s1">name</span>
+    <span class="s1">name </span><span class="s3">= </span><span class="s1">re</span><span class="s3">.</span><span class="s1">sub</span><span class="s3">(</span><span class="s4">r&quot;[\W]&quot;</span><span class="s3">, </span><span class="s4">&quot;_&quot;</span><span class="s3">, </span><span class="s1">name</span><span class="s3">)</span>
+    <span class="s1">MAXVAL </span><span class="s3">= </span><span class="s6">30</span>
+    <span class="s1">name </span><span class="s3">= </span><span class="s1">name</span><span class="s3">[:</span><span class="s1">MAXVAL</span><span class="s3">]</span>
+    <span class="s2">return </span><span class="s1">factory</span><span class="s3">.</span><span class="s1">mktemp</span><span class="s3">(</span><span class="s1">name</span><span class="s3">, </span><span class="s1">numbered</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+
+
+<span class="s3">@</span><span class="s1">fixture</span>
+<span class="s2">def </span><span class="s1">tmp_path</span><span class="s3">(</span>
+    <span class="s1">request</span><span class="s3">: </span><span class="s1">FixtureRequest</span><span class="s3">, </span><span class="s1">tmp_path_factory</span><span class="s3">: </span><span class="s1">TempPathFactory</span>
+<span class="s3">) </span><span class="s1">-&gt; Generator</span><span class="s3">[</span><span class="s1">Path</span><span class="s3">, </span><span class="s2">None</span><span class="s3">, </span><span class="s2">None</span><span class="s3">]:</span>
+    <span class="s0">&quot;&quot;&quot;Return a temporary directory path object which is unique to each test 
+    function invocation, created as a sub directory of the base temporary 
+    directory. 
+ 
+    By default, a new base temporary directory is created each test session, 
+    and old bases are removed after 3 sessions, to aid in debugging. 
+    This behavior can be configured with :confval:`tmp_path_retention_count` and 
+    :confval:`tmp_path_retention_policy`. 
+    If ``--basetemp`` is used then it is cleared each session. See :ref:`base 
+    temporary directory`. 
+ 
+    The returned object is a :class:`pathlib.Path` object. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">path </span><span class="s3">= </span><span class="s1">_mk_tmp</span><span class="s3">(</span><span class="s1">request</span><span class="s3">, </span><span class="s1">tmp_path_factory</span><span class="s3">)</span>
+    <span class="s2">yield </span><span class="s1">path</span>
+
+    <span class="s5"># Remove the tmpdir if the policy is &quot;failed&quot; and the test passed.</span>
+    <span class="s1">tmp_path_factory</span><span class="s3">: </span><span class="s1">TempPathFactory </span><span class="s3">= </span><span class="s1">request</span><span class="s3">.</span><span class="s1">session</span><span class="s3">.</span><span class="s1">config</span><span class="s3">.</span><span class="s1">_tmp_path_factory  </span><span class="s5"># type: ignore</span>
+    <span class="s1">policy </span><span class="s3">= </span><span class="s1">tmp_path_factory</span><span class="s3">.</span><span class="s1">_retention_policy</span>
+    <span class="s1">result_dict </span><span class="s3">= </span><span class="s1">request</span><span class="s3">.</span><span class="s1">node</span><span class="s3">.</span><span class="s1">stash</span><span class="s3">[</span><span class="s1">tmppath_result_key</span><span class="s3">]</span>
+
+    <span class="s2">if </span><span class="s1">policy </span><span class="s3">== </span><span class="s4">&quot;failed&quot; </span><span class="s2">and </span><span class="s1">result_dict</span><span class="s3">.</span><span class="s1">get</span><span class="s3">(</span><span class="s4">&quot;call&quot;</span><span class="s3">, </span><span class="s2">True</span><span class="s3">):</span>
+        <span class="s5"># We do a &quot;best effort&quot; to remove files, but it might not be possible due to some leaked resource,</span>
+        <span class="s5"># permissions, etc, in which case we ignore it.</span>
+        <span class="s1">rmtree</span><span class="s3">(</span><span class="s1">path</span><span class="s3">, </span><span class="s1">ignore_errors</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+
+    <span class="s2">del </span><span class="s1">request</span><span class="s3">.</span><span class="s1">node</span><span class="s3">.</span><span class="s1">stash</span><span class="s3">[</span><span class="s1">tmppath_result_key</span><span class="s3">]</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_sessionfinish</span><span class="s3">(</span><span class="s1">session</span><span class="s3">, </span><span class="s1">exitstatus</span><span class="s3">: </span><span class="s1">Union</span><span class="s3">[</span><span class="s1">int</span><span class="s3">, </span><span class="s1">ExitCode</span><span class="s3">]):</span>
+    <span class="s0">&quot;&quot;&quot;After each session, remove base directory if all the tests passed, 
+    the policy is &quot;failed&quot;, and the basetemp is not specified by a user. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">tmp_path_factory</span><span class="s3">: </span><span class="s1">TempPathFactory </span><span class="s3">= </span><span class="s1">session</span><span class="s3">.</span><span class="s1">config</span><span class="s3">.</span><span class="s1">_tmp_path_factory</span>
+    <span class="s1">basetemp </span><span class="s3">= </span><span class="s1">tmp_path_factory</span><span class="s3">.</span><span class="s1">_basetemp</span>
+    <span class="s2">if </span><span class="s1">basetemp </span><span class="s2">is None</span><span class="s3">:</span>
+        <span class="s2">return</span>
+
+    <span class="s1">policy </span><span class="s3">= </span><span class="s1">tmp_path_factory</span><span class="s3">.</span><span class="s1">_retention_policy</span>
+    <span class="s2">if </span><span class="s3">(</span>
+        <span class="s1">exitstatus </span><span class="s3">== </span><span class="s6">0</span>
+        <span class="s2">and </span><span class="s1">policy </span><span class="s3">== </span><span class="s4">&quot;failed&quot;</span>
+        <span class="s2">and </span><span class="s1">tmp_path_factory</span><span class="s3">.</span><span class="s1">_given_basetemp </span><span class="s2">is None</span>
+    <span class="s3">):</span>
+        <span class="s2">if </span><span class="s1">basetemp</span><span class="s3">.</span><span class="s1">is_dir</span><span class="s3">():</span>
+            <span class="s5"># We do a &quot;best effort&quot; to remove files, but it might not be possible due to some leaked resource,</span>
+            <span class="s5"># permissions, etc, in which case we ignore it.</span>
+            <span class="s1">rmtree</span><span class="s3">(</span><span class="s1">basetemp</span><span class="s3">, </span><span class="s1">ignore_errors</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+
+    <span class="s5"># Remove dead symlinks.</span>
+    <span class="s2">if </span><span class="s1">basetemp</span><span class="s3">.</span><span class="s1">is_dir</span><span class="s3">():</span>
+        <span class="s1">cleanup_dead_symlinks</span><span class="s3">(</span><span class="s1">basetemp</span><span class="s3">)</span>
+
+
+<span class="s3">@</span><span class="s1">hookimpl</span><span class="s3">(</span><span class="s1">tryfirst</span><span class="s3">=</span><span class="s2">True</span><span class="s3">, </span><span class="s1">hookwrapper</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+<span class="s2">def </span><span class="s1">pytest_runtest_makereport</span><span class="s3">(</span><span class="s1">item</span><span class="s3">: </span><span class="s1">Item</span><span class="s3">, </span><span class="s1">call</span><span class="s3">):</span>
+    <span class="s1">outcome </span><span class="s3">= </span><span class="s2">yield</span>
+    <span class="s1">result</span><span class="s3">: </span><span class="s1">CollectReport </span><span class="s3">= </span><span class="s1">outcome</span><span class="s3">.</span><span class="s1">get_result</span><span class="s3">()</span>
+
+    <span class="s1">empty</span><span class="s3">: </span><span class="s1">Dict</span><span class="s3">[</span><span class="s1">str</span><span class="s3">, </span><span class="s1">bool</span><span class="s3">] = {}</span>
+    <span class="s1">item</span><span class="s3">.</span><span class="s1">stash</span><span class="s3">.</span><span class="s1">setdefault</span><span class="s3">(</span><span class="s1">tmppath_result_key</span><span class="s3">, </span><span class="s1">empty</span><span class="s3">)[</span><span class="s1">result</span><span class="s3">.</span><span class="s1">when</span><span class="s3">] = </span><span class="s1">result</span><span class="s3">.</span><span class="s1">passed</span>
+</pre>
+</body>
+</html>

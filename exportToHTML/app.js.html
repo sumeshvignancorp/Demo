@@ -1,0 +1,676 @@
+<html>
+<head>
+<title>app.js</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #bcbec4;}
+.s1 { color: #cf8e6d;}
+.s2 { color: #6aab73;}
+.s3 { color: #2aacb8;}
+.s4 { color: #7a7e85;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+app.js</font>
+</center></td></tr></table>
+<pre><span class="s0">(</span><span class="s1">function</span><span class="s0">(){</span><span class="s1">function </span><span class="s0">r(e,n,t){</span><span class="s1">function </span><span class="s0">o(i,f){</span><span class="s1">if</span><span class="s0">(!n[i]){</span><span class="s1">if</span><span class="s0">(!e[i]){</span><span class="s1">var </span><span class="s0">c=</span><span class="s2">&quot;function&quot;</span><span class="s0">==</span><span class="s1">typeof </span><span class="s0">require&amp;&amp;require;</span><span class="s1">if</span><span class="s0">(!f&amp;&amp;c)</span><span class="s1">return </span><span class="s0">c(i,!</span><span class="s3">0</span><span class="s0">);</span><span class="s1">if</span><span class="s0">(u)</span><span class="s1">return </span><span class="s0">u(i,!</span><span class="s3">0</span><span class="s0">);</span><span class="s1">var </span><span class="s0">a=</span><span class="s1">new </span><span class="s0">Error(</span><span class="s2">&quot;Cannot find module '&quot;</span><span class="s0">+i+</span><span class="s2">&quot;'&quot;</span><span class="s0">);</span><span class="s1">throw </span><span class="s0">a.code=</span><span class="s2">&quot;MODULE_NOT_FOUND&quot;</span><span class="s0">,a}</span><span class="s1">var </span><span class="s0">p=n[i]={exports:{}};e[i][</span><span class="s3">0</span><span class="s0">].call(p.exports,</span><span class="s1">function</span><span class="s0">(r){</span><span class="s1">var </span><span class="s0">n=e[i][</span><span class="s3">1</span><span class="s0">][r];</span><span class="s1">return </span><span class="s0">o(n||r)},p,p.exports,r,e,n,t)}</span><span class="s1">return </span><span class="s0">n[i].exports}</span><span class="s1">for</span><span class="s0">(</span><span class="s1">var </span><span class="s0">u=</span><span class="s2">&quot;function&quot;</span><span class="s0">==</span><span class="s1">typeof </span><span class="s0">require&amp;&amp;require,i=</span><span class="s3">0</span><span class="s0">;i&lt;t.length;i++)o(t[i]);</span><span class="s1">return </span><span class="s0">o}</span><span class="s1">return </span><span class="s0">r})()({</span><span class="s3">1</span><span class="s0">:[</span><span class="s1">function</span><span class="s0">(require,module,exports){</span>
+<span class="s0">const { getCollapsedCategory, setCollapsedIds } = require(</span><span class="s2">'./storage.js'</span><span class="s0">)</span>
+
+<span class="s0">class DataManager {</span>
+    <span class="s0">setManager(data) {</span>
+        <span class="s0">const collapsedCategories = [...getCollapsedCategory(data.renderCollapsed)]</span>
+        <span class="s0">const collapsedIds = []</span>
+        <span class="s0">const tests = Object.values(data.tests).flat().map((test, index) =&gt; {</span>
+            <span class="s0">const collapsed = collapsedCategories.includes(test.result.toLowerCase())</span>
+            <span class="s0">const id = `test_${index}`</span>
+            <span class="s1">if </span><span class="s0">(collapsed) {</span>
+                <span class="s0">collapsedIds.push(id)</span>
+            <span class="s0">}</span>
+            <span class="s1">return </span><span class="s0">{</span>
+                <span class="s0">...test,</span>
+                <span class="s0">id,</span>
+                <span class="s0">collapsed,</span>
+            <span class="s0">}</span>
+        <span class="s0">})</span>
+        <span class="s0">const dataBlob = { ...data, tests }</span>
+        <span class="s1">this</span><span class="s0">.data = { ...dataBlob }</span>
+        <span class="s1">this</span><span class="s0">.renderData = { ...dataBlob }</span>
+        <span class="s0">setCollapsedIds(collapsedIds)</span>
+    <span class="s0">}</span>
+
+    <span class="s0">get allData() {</span>
+        <span class="s1">return </span><span class="s0">{ ...</span><span class="s1">this</span><span class="s0">.data }</span>
+    <span class="s0">}</span>
+
+    <span class="s0">resetRender() {</span>
+        <span class="s1">this</span><span class="s0">.renderData = { ...</span><span class="s1">this</span><span class="s0">.data }</span>
+    <span class="s0">}</span>
+
+    <span class="s0">setRender(data) {</span>
+        <span class="s1">this</span><span class="s0">.renderData.tests = [...data]</span>
+    <span class="s0">}</span>
+
+    <span class="s0">toggleCollapsedItem(id) {</span>
+        <span class="s1">this</span><span class="s0">.renderData.tests = </span><span class="s1">this</span><span class="s0">.renderData.tests.map((test) =&gt;</span>
+            <span class="s0">test.id === id ? { ...test, collapsed: !test.collapsed } : test,</span>
+        <span class="s0">)</span>
+    <span class="s0">}</span>
+
+    <span class="s0">set allCollapsed(collapsed) {</span>
+        <span class="s1">this</span><span class="s0">.renderData = { ...</span><span class="s1">this</span><span class="s0">.renderData, tests: [...</span><span class="s1">this</span><span class="s0">.renderData.tests.map((test) =&gt; (</span>
+            <span class="s0">{ ...test, collapsed }</span>
+        <span class="s0">))] }</span>
+    <span class="s0">}</span>
+
+    <span class="s0">get testSubset() {</span>
+        <span class="s1">return </span><span class="s0">[...</span><span class="s1">this</span><span class="s0">.renderData.tests]</span>
+    <span class="s0">}</span>
+
+    <span class="s0">get environment() {</span>
+        <span class="s1">return this</span><span class="s0">.renderData.environment</span>
+    <span class="s0">}</span>
+
+    <span class="s0">get initialSort() {</span>
+        <span class="s1">return this</span><span class="s0">.data.initialSort</span>
+    <span class="s0">}</span>
+<span class="s0">}</span>
+
+<span class="s0">module.exports = {</span>
+    <span class="s0">manager: </span><span class="s1">new </span><span class="s0">DataManager(),</span>
+<span class="s0">}</span>
+
+<span class="s0">},{</span><span class="s2">&quot;./storage.js&quot;</span><span class="s0">:</span><span class="s3">8</span><span class="s0">}],</span><span class="s3">2</span><span class="s0">:[</span><span class="s1">function</span><span class="s0">(require,module,exports){</span>
+<span class="s0">const mediaViewer = require(</span><span class="s2">'./mediaviewer.js'</span><span class="s0">)</span>
+<span class="s0">const templateEnvRow = document.getElementById(</span><span class="s2">'template_environment_row'</span><span class="s0">)</span>
+<span class="s0">const templateResult = document.getElementById(</span><span class="s2">'template_results-table__tbody'</span><span class="s0">)</span>
+
+<span class="s1">function </span><span class="s0">htmlToElements(html) {</span>
+    <span class="s0">const temp = document.createElement(</span><span class="s2">'template'</span><span class="s0">)</span>
+    <span class="s0">temp.innerHTML = html</span>
+    <span class="s1">return </span><span class="s0">temp.content.childNodes</span>
+<span class="s0">}</span>
+
+<span class="s0">const find = (selector, elem) =&gt; {</span>
+    <span class="s1">if </span><span class="s0">(!elem) {</span>
+        <span class="s0">elem = document</span>
+    <span class="s0">}</span>
+    <span class="s1">return </span><span class="s0">elem.querySelector(selector)</span>
+<span class="s0">}</span>
+
+<span class="s0">const findAll = (selector, elem) =&gt; {</span>
+    <span class="s1">if </span><span class="s0">(!elem) {</span>
+        <span class="s0">elem = document</span>
+    <span class="s0">}</span>
+    <span class="s1">return </span><span class="s0">[...elem.querySelectorAll(selector)]</span>
+<span class="s0">}</span>
+
+<span class="s0">const dom = {</span>
+    <span class="s0">getStaticRow: (key, value) =&gt; {</span>
+        <span class="s0">const envRow = templateEnvRow.content.cloneNode(</span><span class="s1">true</span><span class="s0">)</span>
+        <span class="s0">const isObj = </span><span class="s1">typeof </span><span class="s0">value === </span><span class="s2">'object' </span><span class="s0">&amp;&amp; value !== </span><span class="s1">null</span>
+        <span class="s0">const values = isObj ? Object.keys(value).map((k) =&gt; `${k}: ${value[k]}`) : </span><span class="s1">null</span>
+
+        <span class="s0">const valuesElement = htmlToElements(</span>
+            <span class="s0">values ? `&lt;ul&gt;${values.map((val) =&gt; `&lt;li&gt;${val}&lt;/li&gt;`).join(</span><span class="s2">''</span><span class="s0">)}&lt;ul&gt;` : `&lt;div&gt;${value}&lt;/div&gt;`)[</span><span class="s3">0</span><span class="s0">]</span>
+        <span class="s0">const td = findAll(</span><span class="s2">'td'</span><span class="s0">, envRow)</span>
+        <span class="s0">td[</span><span class="s3">0</span><span class="s0">].textContent = key</span>
+        <span class="s0">td[</span><span class="s3">1</span><span class="s0">].appendChild(valuesElement)</span>
+
+        <span class="s1">return </span><span class="s0">envRow</span>
+    <span class="s0">},</span>
+    <span class="s0">getResultTBody: ({ testId, id, log, extras, resultsTableRow, tableHtml, result, collapsed }) =&gt; {</span>
+        <span class="s0">const resultBody = templateResult.content.cloneNode(</span><span class="s1">true</span><span class="s0">)</span>
+        <span class="s0">resultBody.querySelector(</span><span class="s2">'tbody'</span><span class="s0">).classList.add(result.toLowerCase())</span>
+        <span class="s0">resultBody.querySelector(</span><span class="s2">'tbody'</span><span class="s0">).id = testId</span>
+        <span class="s0">resultBody.querySelector(</span><span class="s2">'.collapsible'</span><span class="s0">).dataset.id = id</span>
+
+        <span class="s0">resultsTableRow.forEach((html) =&gt; {</span>
+            <span class="s0">const t = document.createElement(</span><span class="s2">'template'</span><span class="s0">)</span>
+            <span class="s0">t.innerHTML = html</span>
+            <span class="s0">resultBody.querySelector(</span><span class="s2">'.collapsible'</span><span class="s0">).appendChild(t.content)</span>
+        <span class="s0">})</span>
+
+        <span class="s1">if </span><span class="s0">(log) {</span>
+            <span class="s4">// Wrap lines starting with &quot;E&quot; with span.error to color those lines red</span>
+            <span class="s0">const wrappedLog = log.replace(/^E.*$/gm, (match) =&gt; `&lt;span class=</span><span class="s2">&quot;error&quot;</span><span class="s0">&gt;${match}&lt;/span&gt;`)</span>
+            <span class="s0">resultBody.querySelector(</span><span class="s2">'.log'</span><span class="s0">).innerHTML = wrappedLog</span>
+        <span class="s0">} </span><span class="s1">else </span><span class="s0">{</span>
+            <span class="s0">resultBody.querySelector(</span><span class="s2">'.log'</span><span class="s0">).remove()</span>
+        <span class="s0">}</span>
+
+        <span class="s1">if </span><span class="s0">(collapsed) {</span>
+            <span class="s0">resultBody.querySelector(</span><span class="s2">'.collapsible &gt; td'</span><span class="s0">)?.classList.add(</span><span class="s2">'collapsed'</span><span class="s0">)</span>
+            <span class="s0">resultBody.querySelector(</span><span class="s2">'.extras-row'</span><span class="s0">).classList.add(</span><span class="s2">'hidden'</span><span class="s0">)</span>
+        <span class="s0">} </span><span class="s1">else </span><span class="s0">{</span>
+            <span class="s0">resultBody.querySelector(</span><span class="s2">'.collapsible &gt; td'</span><span class="s0">)?.classList.remove(</span><span class="s2">'collapsed'</span><span class="s0">)</span>
+        <span class="s0">}</span>
+
+        <span class="s0">const media = []</span>
+        <span class="s0">extras?.forEach(({ name, format_type, content }) =&gt; {</span>
+            <span class="s1">if </span><span class="s0">([</span><span class="s2">'image'</span><span class="s0">, </span><span class="s2">'video'</span><span class="s0">].includes(format_type)) {</span>
+                <span class="s0">media.push({ path: content, name, format_type })</span>
+            <span class="s0">}</span>
+
+            <span class="s1">if </span><span class="s0">(format_type === </span><span class="s2">'html'</span><span class="s0">) {</span>
+                <span class="s0">resultBody.querySelector(</span><span class="s2">'.extraHTML'</span><span class="s0">).insertAdjacentHTML(</span><span class="s2">'beforeend'</span><span class="s0">, `&lt;div&gt;${content}&lt;/div&gt;`)</span>
+            <span class="s0">}</span>
+        <span class="s0">})</span>
+        <span class="s0">mediaViewer.setup(resultBody, media)</span>
+
+        <span class="s4">// Add custom html from the pytest_html_results_table_html hook</span>
+        <span class="s0">tableHtml?.forEach((item) =&gt; {</span>
+            <span class="s0">resultBody.querySelector(</span><span class="s2">'td[class=&quot;extra&quot;]'</span><span class="s0">).insertAdjacentHTML(</span><span class="s2">'beforeend'</span><span class="s0">, item)</span>
+        <span class="s0">})</span>
+
+        <span class="s1">return </span><span class="s0">resultBody</span>
+    <span class="s0">},</span>
+<span class="s0">}</span>
+
+<span class="s0">module.exports = {</span>
+    <span class="s0">dom,</span>
+    <span class="s0">htmlToElements,</span>
+    <span class="s0">find,</span>
+    <span class="s0">findAll,</span>
+<span class="s0">}</span>
+
+<span class="s0">},{</span><span class="s2">&quot;./mediaviewer.js&quot;</span><span class="s0">:</span><span class="s3">6</span><span class="s0">}],</span><span class="s3">3</span><span class="s0">:[</span><span class="s1">function</span><span class="s0">(require,module,exports){</span>
+<span class="s0">const { manager } = require(</span><span class="s2">'./datamanager.js'</span><span class="s0">)</span>
+<span class="s0">const { doSort } = require(</span><span class="s2">'./sort.js'</span><span class="s0">)</span>
+<span class="s0">const storageModule = require(</span><span class="s2">'./storage.js'</span><span class="s0">)</span>
+
+<span class="s0">const getFilteredSubSet = (filter) =&gt;</span>
+    <span class="s0">manager.allData.tests.filter(({ result }) =&gt; filter.includes(result.toLowerCase()))</span>
+
+<span class="s0">const doInitFilter = () =&gt; {</span>
+    <span class="s0">const currentFilter = storageModule.getVisible()</span>
+    <span class="s0">const filteredSubset = getFilteredSubSet(currentFilter)</span>
+    <span class="s0">manager.setRender(filteredSubset)</span>
+<span class="s0">}</span>
+
+<span class="s0">const doFilter = (type, show) =&gt; {</span>
+    <span class="s1">if </span><span class="s0">(show) {</span>
+        <span class="s0">storageModule.showCategory(type)</span>
+    <span class="s0">} </span><span class="s1">else </span><span class="s0">{</span>
+        <span class="s0">storageModule.hideCategory(type)</span>
+    <span class="s0">}</span>
+
+    <span class="s0">const currentFilter = storageModule.getVisible()</span>
+    <span class="s0">const filteredSubset = getFilteredSubSet(currentFilter)</span>
+    <span class="s0">manager.setRender(filteredSubset)</span>
+
+    <span class="s0">const sortColumn = storageModule.getSort()</span>
+    <span class="s0">doSort(sortColumn, </span><span class="s1">true</span><span class="s0">)</span>
+<span class="s0">}</span>
+
+<span class="s0">module.exports = {</span>
+    <span class="s0">doFilter,</span>
+    <span class="s0">doInitFilter,</span>
+<span class="s0">}</span>
+
+<span class="s0">},{</span><span class="s2">&quot;./datamanager.js&quot;</span><span class="s0">:</span><span class="s3">1</span><span class="s0">,</span><span class="s2">&quot;./sort.js&quot;</span><span class="s0">:</span><span class="s3">7</span><span class="s0">,</span><span class="s2">&quot;./storage.js&quot;</span><span class="s0">:</span><span class="s3">8</span><span class="s0">}],</span><span class="s3">4</span><span class="s0">:[</span><span class="s1">function</span><span class="s0">(require,module,exports){</span>
+<span class="s0">const { redraw, bindEvents, renderStatic } = require(</span><span class="s2">'./main.js'</span><span class="s0">)</span>
+<span class="s0">const { doInitFilter } = require(</span><span class="s2">'./filter.js'</span><span class="s0">)</span>
+<span class="s0">const { doInitSort } = require(</span><span class="s2">'./sort.js'</span><span class="s0">)</span>
+<span class="s0">const { manager } = require(</span><span class="s2">'./datamanager.js'</span><span class="s0">)</span>
+<span class="s0">const data = JSON.parse(document.getElementById(</span><span class="s2">'data-container'</span><span class="s0">).dataset.jsonblob)</span>
+
+<span class="s1">function </span><span class="s0">init() {</span>
+    <span class="s0">manager.setManager(data)</span>
+    <span class="s0">doInitFilter()</span>
+    <span class="s0">doInitSort()</span>
+    <span class="s0">renderStatic()</span>
+    <span class="s0">redraw()</span>
+    <span class="s0">bindEvents()</span>
+<span class="s0">}</span>
+
+<span class="s0">init()</span>
+
+<span class="s0">},{</span><span class="s2">&quot;./datamanager.js&quot;</span><span class="s0">:</span><span class="s3">1</span><span class="s0">,</span><span class="s2">&quot;./filter.js&quot;</span><span class="s0">:</span><span class="s3">3</span><span class="s0">,</span><span class="s2">&quot;./main.js&quot;</span><span class="s0">:</span><span class="s3">5</span><span class="s0">,</span><span class="s2">&quot;./sort.js&quot;</span><span class="s0">:</span><span class="s3">7</span><span class="s0">}],</span><span class="s3">5</span><span class="s0">:[</span><span class="s1">function</span><span class="s0">(require,module,exports){</span>
+<span class="s0">const { dom, find, findAll } = require(</span><span class="s2">'./dom.js'</span><span class="s0">)</span>
+<span class="s0">const { manager } = require(</span><span class="s2">'./datamanager.js'</span><span class="s0">)</span>
+<span class="s0">const { doSort } = require(</span><span class="s2">'./sort.js'</span><span class="s0">)</span>
+<span class="s0">const { doFilter } = require(</span><span class="s2">'./filter.js'</span><span class="s0">)</span>
+<span class="s0">const {</span>
+    <span class="s0">getVisible,</span>
+    <span class="s0">getCollapsedIds,</span>
+    <span class="s0">setCollapsedIds,</span>
+    <span class="s0">getSort,</span>
+    <span class="s0">getSortDirection,</span>
+    <span class="s0">possibleFilters,</span>
+<span class="s0">} = require(</span><span class="s2">'./storage.js'</span><span class="s0">)</span>
+
+<span class="s0">const removeChildren = (node) =&gt; {</span>
+    <span class="s1">while </span><span class="s0">(node.firstChild) {</span>
+        <span class="s0">node.removeChild(node.firstChild)</span>
+    <span class="s0">}</span>
+<span class="s0">}</span>
+
+<span class="s0">const renderStatic = () =&gt; {</span>
+    <span class="s0">const renderEnvironmentTable = () =&gt; {</span>
+        <span class="s0">const environment = manager.environment</span>
+        <span class="s0">const rows = Object.keys(environment).map((key) =&gt; dom.getStaticRow(key, environment[key]))</span>
+        <span class="s0">const table = document.getElementById(</span><span class="s2">'environment'</span><span class="s0">)</span>
+        <span class="s0">removeChildren(table)</span>
+        <span class="s0">rows.forEach((row) =&gt; table.appendChild(row))</span>
+    <span class="s0">}</span>
+    <span class="s0">renderEnvironmentTable()</span>
+<span class="s0">}</span>
+
+<span class="s0">const addItemToggleListener = (elem) =&gt; {</span>
+    <span class="s0">elem.addEventListener(</span><span class="s2">'click'</span><span class="s0">, ({ target }) =&gt; {</span>
+        <span class="s0">const id = target.parentElement.dataset.id</span>
+        <span class="s0">manager.toggleCollapsedItem(id)</span>
+
+        <span class="s0">const collapsedIds = getCollapsedIds()</span>
+        <span class="s1">if </span><span class="s0">(collapsedIds.includes(id)) {</span>
+            <span class="s0">const updated = collapsedIds.filter((item) =&gt; item !== id)</span>
+            <span class="s0">setCollapsedIds(updated)</span>
+        <span class="s0">} </span><span class="s1">else </span><span class="s0">{</span>
+            <span class="s0">collapsedIds.push(id)</span>
+            <span class="s0">setCollapsedIds(collapsedIds)</span>
+        <span class="s0">}</span>
+        <span class="s0">redraw()</span>
+    <span class="s0">})</span>
+<span class="s0">}</span>
+
+<span class="s0">const renderContent = (tests) =&gt; {</span>
+    <span class="s0">const sortAttr = getSort(manager.initialSort)</span>
+    <span class="s0">const sortAsc = JSON.parse(getSortDirection())</span>
+    <span class="s0">const rows = tests.map(dom.getResultTBody)</span>
+    <span class="s0">const table = document.getElementById(</span><span class="s2">'results-table'</span><span class="s0">)</span>
+    <span class="s0">const tableHeader = document.getElementById(</span><span class="s2">'results-table-head'</span><span class="s0">)</span>
+
+    <span class="s0">const newTable = document.createElement(</span><span class="s2">'table'</span><span class="s0">)</span>
+    <span class="s0">newTable.id = </span><span class="s2">'results-table'</span>
+
+    <span class="s4">// remove all sorting classes and set the relevant</span>
+    <span class="s0">findAll(</span><span class="s2">'.sortable'</span><span class="s0">, tableHeader).forEach((elem) =&gt; elem.classList.remove(</span><span class="s2">'asc'</span><span class="s0">, </span><span class="s2">'desc'</span><span class="s0">))</span>
+    <span class="s0">tableHeader.querySelector(`.sortable[data-column-type=</span><span class="s2">&quot;${sortAttr}&quot;</span><span class="s0">]`).classList.add(sortAsc ? </span><span class="s2">'desc' </span><span class="s0">: </span><span class="s2">'asc'</span><span class="s0">)</span>
+    <span class="s0">newTable.appendChild(tableHeader)</span>
+
+    <span class="s1">if </span><span class="s0">(!rows.length) {</span>
+        <span class="s0">const emptyTable = document.getElementById(</span><span class="s2">'template_results-table__body--empty'</span><span class="s0">).content.cloneNode(</span><span class="s1">true</span><span class="s0">)</span>
+        <span class="s0">newTable.appendChild(emptyTable)</span>
+    <span class="s0">} </span><span class="s1">else </span><span class="s0">{</span>
+        <span class="s0">rows.forEach((row) =&gt; {</span>
+            <span class="s1">if </span><span class="s0">(!!row) {</span>
+                <span class="s0">findAll(</span><span class="s2">'.collapsible td:not(.col-links'</span><span class="s0">, row).forEach(addItemToggleListener)</span>
+                <span class="s0">find(</span><span class="s2">'.logexpander'</span><span class="s0">, row).addEventListener(</span><span class="s2">'click'</span><span class="s0">,</span>
+                    <span class="s0">(evt) =&gt; evt.target.parentNode.classList.toggle(</span><span class="s2">'expanded'</span><span class="s0">),</span>
+                <span class="s0">)</span>
+                <span class="s0">newTable.appendChild(row)</span>
+            <span class="s0">}</span>
+        <span class="s0">})</span>
+    <span class="s0">}</span>
+
+    <span class="s0">table.replaceWith(newTable)</span>
+<span class="s0">}</span>
+
+<span class="s0">const renderDerived = () =&gt; {</span>
+    <span class="s0">const currentFilter = getVisible()</span>
+    <span class="s0">possibleFilters.forEach((result) =&gt; {</span>
+        <span class="s0">const input = document.querySelector(`input[data-test-result=</span><span class="s2">&quot;${result}&quot;</span><span class="s0">]`)</span>
+        <span class="s0">input.checked = currentFilter.includes(result)</span>
+    <span class="s0">})</span>
+<span class="s0">}</span>
+
+<span class="s0">const bindEvents = () =&gt; {</span>
+    <span class="s0">const filterColumn = (evt) =&gt; {</span>
+        <span class="s0">const { target: element } = evt</span>
+        <span class="s0">const { testResult } = element.dataset</span>
+
+        <span class="s0">doFilter(testResult, element.checked)</span>
+        <span class="s0">const collapsedIds = getCollapsedIds()</span>
+        <span class="s0">const updated = manager.renderData.tests.map((test) =&gt; {</span>
+            <span class="s1">return </span><span class="s0">{</span>
+                <span class="s0">...test,</span>
+                <span class="s0">collapsed: collapsedIds.includes(test.id),</span>
+            <span class="s0">}</span>
+        <span class="s0">})</span>
+        <span class="s0">manager.setRender(updated)</span>
+        <span class="s0">redraw()</span>
+    <span class="s0">}</span>
+
+    <span class="s0">const header = document.getElementById(</span><span class="s2">'environment-header'</span><span class="s0">)</span>
+    <span class="s0">header.addEventListener(</span><span class="s2">'click'</span><span class="s0">, () =&gt; {</span>
+        <span class="s0">const table = document.getElementById(</span><span class="s2">'environment'</span><span class="s0">)</span>
+        <span class="s0">table.classList.toggle(</span><span class="s2">'hidden'</span><span class="s0">)</span>
+        <span class="s0">header.classList.toggle(</span><span class="s2">'collapsed'</span><span class="s0">)</span>
+    <span class="s0">})</span>
+
+    <span class="s0">findAll(</span><span class="s2">'input[name=&quot;filter_checkbox&quot;]'</span><span class="s0">).forEach((elem) =&gt; {</span>
+        <span class="s0">elem.addEventListener(</span><span class="s2">'click'</span><span class="s0">, filterColumn)</span>
+    <span class="s0">})</span>
+
+    <span class="s0">findAll(</span><span class="s2">'.sortable'</span><span class="s0">).forEach((elem) =&gt; {</span>
+        <span class="s0">elem.addEventListener(</span><span class="s2">'click'</span><span class="s0">, (evt) =&gt; {</span>
+            <span class="s0">const { target: element } = evt</span>
+            <span class="s0">const { columnType } = element.dataset</span>
+            <span class="s0">doSort(columnType)</span>
+            <span class="s0">redraw()</span>
+        <span class="s0">})</span>
+    <span class="s0">})</span>
+
+    <span class="s0">document.getElementById(</span><span class="s2">'show_all_details'</span><span class="s0">).addEventListener(</span><span class="s2">'click'</span><span class="s0">, () =&gt; {</span>
+        <span class="s0">manager.allCollapsed = </span><span class="s1">false</span>
+        <span class="s0">setCollapsedIds([])</span>
+        <span class="s0">redraw()</span>
+    <span class="s0">})</span>
+    <span class="s0">document.getElementById(</span><span class="s2">'hide_all_details'</span><span class="s0">).addEventListener(</span><span class="s2">'click'</span><span class="s0">, () =&gt; {</span>
+        <span class="s0">manager.allCollapsed = </span><span class="s1">true</span>
+        <span class="s0">const allIds = manager.renderData.tests.map((test) =&gt; test.id)</span>
+        <span class="s0">setCollapsedIds(allIds)</span>
+        <span class="s0">redraw()</span>
+    <span class="s0">})</span>
+<span class="s0">}</span>
+
+<span class="s0">const redraw = () =&gt; {</span>
+    <span class="s0">const { testSubset } = manager</span>
+
+    <span class="s0">renderContent(testSubset)</span>
+    <span class="s0">renderDerived()</span>
+<span class="s0">}</span>
+
+<span class="s0">module.exports = {</span>
+    <span class="s0">redraw,</span>
+    <span class="s0">bindEvents,</span>
+    <span class="s0">renderStatic,</span>
+<span class="s0">}</span>
+
+<span class="s0">},{</span><span class="s2">&quot;./datamanager.js&quot;</span><span class="s0">:</span><span class="s3">1</span><span class="s0">,</span><span class="s2">&quot;./dom.js&quot;</span><span class="s0">:</span><span class="s3">2</span><span class="s0">,</span><span class="s2">&quot;./filter.js&quot;</span><span class="s0">:</span><span class="s3">3</span><span class="s0">,</span><span class="s2">&quot;./sort.js&quot;</span><span class="s0">:</span><span class="s3">7</span><span class="s0">,</span><span class="s2">&quot;./storage.js&quot;</span><span class="s0">:</span><span class="s3">8</span><span class="s0">}],</span><span class="s3">6</span><span class="s0">:[</span><span class="s1">function</span><span class="s0">(require,module,exports){</span>
+<span class="s0">class MediaViewer {</span>
+    <span class="s0">constructor(assets) {</span>
+        <span class="s1">this</span><span class="s0">.assets = assets</span>
+        <span class="s1">this</span><span class="s0">.index = </span><span class="s3">0</span>
+    <span class="s0">}</span>
+
+    <span class="s0">nextActive() {</span>
+        <span class="s1">this</span><span class="s0">.index = </span><span class="s1">this</span><span class="s0">.index === </span><span class="s1">this</span><span class="s0">.assets.length - </span><span class="s3">1 </span><span class="s0">? </span><span class="s3">0 </span><span class="s0">: </span><span class="s1">this</span><span class="s0">.index + </span><span class="s3">1</span>
+        <span class="s1">return </span><span class="s0">[</span><span class="s1">this</span><span class="s0">.activeFile, </span><span class="s1">this</span><span class="s0">.index]</span>
+    <span class="s0">}</span>
+
+    <span class="s0">prevActive() {</span>
+        <span class="s1">this</span><span class="s0">.index = </span><span class="s1">this</span><span class="s0">.index === </span><span class="s3">0 </span><span class="s0">? </span><span class="s1">this</span><span class="s0">.assets.length - </span><span class="s3">1 </span><span class="s0">: </span><span class="s1">this</span><span class="s0">.index -</span><span class="s3">1</span>
+        <span class="s1">return </span><span class="s0">[</span><span class="s1">this</span><span class="s0">.activeFile, </span><span class="s1">this</span><span class="s0">.index]</span>
+    <span class="s0">}</span>
+
+    <span class="s0">get currentIndex() {</span>
+        <span class="s1">return this</span><span class="s0">.index</span>
+    <span class="s0">}</span>
+
+    <span class="s0">get activeFile() {</span>
+        <span class="s1">return this</span><span class="s0">.assets[</span><span class="s1">this</span><span class="s0">.index]</span>
+    <span class="s0">}</span>
+<span class="s0">}</span>
+
+
+<span class="s0">const setup = (resultBody, assets) =&gt; {</span>
+    <span class="s1">if </span><span class="s0">(!assets.length) {</span>
+        <span class="s0">resultBody.querySelector(</span><span class="s2">'.media'</span><span class="s0">).classList.add(</span><span class="s2">'hidden'</span><span class="s0">)</span>
+        <span class="s1">return</span>
+    <span class="s0">}</span>
+
+    <span class="s0">const mediaViewer = </span><span class="s1">new </span><span class="s0">MediaViewer(assets)</span>
+    <span class="s0">const container = resultBody.querySelector(</span><span class="s2">'.media-container'</span><span class="s0">)</span>
+    <span class="s0">const leftArrow = resultBody.querySelector(</span><span class="s2">'.media-container__nav--left'</span><span class="s0">)</span>
+    <span class="s0">const rightArrow = resultBody.querySelector(</span><span class="s2">'.media-container__nav--right'</span><span class="s0">)</span>
+    <span class="s0">const mediaName = resultBody.querySelector(</span><span class="s2">'.media__name'</span><span class="s0">)</span>
+    <span class="s0">const counter = resultBody.querySelector(</span><span class="s2">'.media__counter'</span><span class="s0">)</span>
+    <span class="s0">const imageEl = resultBody.querySelector(</span><span class="s2">'img'</span><span class="s0">)</span>
+    <span class="s0">const sourceEl = resultBody.querySelector(</span><span class="s2">'source'</span><span class="s0">)</span>
+    <span class="s0">const videoEl = resultBody.querySelector(</span><span class="s2">'video'</span><span class="s0">)</span>
+
+    <span class="s0">const setImg = (media, index) =&gt; {</span>
+        <span class="s1">if </span><span class="s0">(media?.format_type === </span><span class="s2">'image'</span><span class="s0">) {</span>
+            <span class="s0">imageEl.src = media.path</span>
+
+            <span class="s0">imageEl.classList.remove(</span><span class="s2">'hidden'</span><span class="s0">)</span>
+            <span class="s0">videoEl.classList.add(</span><span class="s2">'hidden'</span><span class="s0">)</span>
+        <span class="s0">} </span><span class="s1">else if </span><span class="s0">(media?.format_type === </span><span class="s2">'video'</span><span class="s0">) {</span>
+            <span class="s0">sourceEl.src = media.path</span>
+
+            <span class="s0">videoEl.classList.remove(</span><span class="s2">'hidden'</span><span class="s0">)</span>
+            <span class="s0">imageEl.classList.add(</span><span class="s2">'hidden'</span><span class="s0">)</span>
+        <span class="s0">}</span>
+
+        <span class="s0">mediaName.innerText = media?.name</span>
+        <span class="s0">counter.innerText = `${index + </span><span class="s3">1</span><span class="s0">} / ${assets.length}`</span>
+    <span class="s0">}</span>
+    <span class="s0">setImg(mediaViewer.activeFile, mediaViewer.currentIndex)</span>
+
+    <span class="s0">const moveLeft = () =&gt; {</span>
+        <span class="s0">const [media, index] = mediaViewer.prevActive()</span>
+        <span class="s0">setImg(media, index)</span>
+    <span class="s0">}</span>
+    <span class="s0">const doRight = () =&gt; {</span>
+        <span class="s0">const [media, index] = mediaViewer.nextActive()</span>
+        <span class="s0">setImg(media, index)</span>
+    <span class="s0">}</span>
+    <span class="s0">const openImg = () =&gt; {</span>
+        <span class="s0">window.open(mediaViewer.activeFile.path, </span><span class="s2">'_blank'</span><span class="s0">)</span>
+    <span class="s0">}</span>
+    <span class="s1">if </span><span class="s0">(assets.length === </span><span class="s3">1</span><span class="s0">) {</span>
+        <span class="s0">container.classList.add(</span><span class="s2">'media-container--fullscreen'</span><span class="s0">)</span>
+    <span class="s0">} </span><span class="s1">else </span><span class="s0">{</span>
+        <span class="s0">leftArrow.addEventListener(</span><span class="s2">'click'</span><span class="s0">, moveLeft)</span>
+        <span class="s0">rightArrow.addEventListener(</span><span class="s2">'click'</span><span class="s0">, doRight)</span>
+    <span class="s0">}</span>
+    <span class="s0">imageEl.addEventListener(</span><span class="s2">'click'</span><span class="s0">, openImg)</span>
+<span class="s0">}</span>
+
+<span class="s0">module.exports = {</span>
+    <span class="s0">setup,</span>
+<span class="s0">}</span>
+
+<span class="s0">},{}],</span><span class="s3">7</span><span class="s0">:[</span><span class="s1">function</span><span class="s0">(require,module,exports){</span>
+<span class="s0">const { manager } = require(</span><span class="s2">'./datamanager.js'</span><span class="s0">)</span>
+<span class="s0">const storageModule = require(</span><span class="s2">'./storage.js'</span><span class="s0">)</span>
+
+<span class="s0">const genericSort = (list, key, ascending, customOrder) =&gt; {</span>
+    <span class="s0">let sorted</span>
+    <span class="s1">if </span><span class="s0">(customOrder) {</span>
+        <span class="s0">sorted = list.sort((a, b) =&gt; {</span>
+            <span class="s0">const aValue = a.result.toLowerCase()</span>
+            <span class="s0">const bValue = b.result.toLowerCase()</span>
+
+            <span class="s0">const aIndex = customOrder.findIndex((item) =&gt; item.toLowerCase() === aValue)</span>
+            <span class="s0">const bIndex = customOrder.findIndex((item) =&gt; item.toLowerCase() === bValue)</span>
+
+            <span class="s4">// Compare the indices to determine the sort order</span>
+            <span class="s1">return </span><span class="s0">aIndex - bIndex</span>
+        <span class="s0">})</span>
+    <span class="s0">} </span><span class="s1">else </span><span class="s0">{</span>
+        <span class="s0">sorted = list.sort((a, b) =&gt; a[key] === b[key] ? </span><span class="s3">0 </span><span class="s0">: a[key] &gt; b[key] ? </span><span class="s3">1 </span><span class="s0">: -</span><span class="s3">1</span><span class="s0">)</span>
+    <span class="s0">}</span>
+
+    <span class="s1">if </span><span class="s0">(ascending) {</span>
+        <span class="s0">sorted.reverse()</span>
+    <span class="s0">}</span>
+    <span class="s1">return </span><span class="s0">sorted</span>
+<span class="s0">}</span>
+
+<span class="s0">const durationSort = (list, ascending) =&gt; {</span>
+    <span class="s0">const parseDuration = (duration) =&gt; {</span>
+        <span class="s1">if </span><span class="s0">(duration.includes(</span><span class="s2">':'</span><span class="s0">)) {</span>
+            <span class="s4">// If it's in the format &quot;HH:mm:ss&quot;</span>
+            <span class="s0">const [hours, minutes, seconds] = duration.split(</span><span class="s2">':'</span><span class="s0">).map(Number)</span>
+            <span class="s1">return </span><span class="s0">(hours * </span><span class="s3">3600 </span><span class="s0">+ minutes * </span><span class="s3">60 </span><span class="s0">+ seconds) * </span><span class="s3">1000</span>
+        <span class="s0">} </span><span class="s1">else </span><span class="s0">{</span>
+            <span class="s4">// If it's in the format &quot;nnn ms&quot;</span>
+            <span class="s1">return </span><span class="s0">parseInt(duration)</span>
+        <span class="s0">}</span>
+    <span class="s0">}</span>
+    <span class="s0">const sorted = list.sort((a, b) =&gt; parseDuration(a[</span><span class="s2">'duration'</span><span class="s0">]) - parseDuration(b[</span><span class="s2">'duration'</span><span class="s0">]))</span>
+    <span class="s1">if </span><span class="s0">(ascending) {</span>
+        <span class="s0">sorted.reverse()</span>
+    <span class="s0">}</span>
+    <span class="s1">return </span><span class="s0">sorted</span>
+<span class="s0">}</span>
+
+<span class="s0">const doInitSort = () =&gt; {</span>
+    <span class="s0">const type = storageModule.getSort(manager.initialSort)</span>
+    <span class="s0">const ascending = storageModule.getSortDirection()</span>
+    <span class="s0">const list = manager.testSubset</span>
+    <span class="s0">const initialOrder = [</span><span class="s2">'Error'</span><span class="s0">, </span><span class="s2">'Failed'</span><span class="s0">, </span><span class="s2">'Rerun'</span><span class="s0">, </span><span class="s2">'XFailed'</span><span class="s0">, </span><span class="s2">'XPassed'</span><span class="s0">, </span><span class="s2">'Skipped'</span><span class="s0">, </span><span class="s2">'Passed'</span><span class="s0">]</span>
+
+    <span class="s0">storageModule.setSort(type)</span>
+    <span class="s0">storageModule.setSortDirection(ascending)</span>
+
+    <span class="s1">if </span><span class="s0">(type?.toLowerCase() === </span><span class="s2">'original'</span><span class="s0">) {</span>
+        <span class="s0">manager.setRender(list)</span>
+    <span class="s0">} </span><span class="s1">else </span><span class="s0">{</span>
+        <span class="s0">let sortedList</span>
+        <span class="s1">switch </span><span class="s0">(type) {</span>
+        <span class="s1">case </span><span class="s2">'duration'</span><span class="s0">:</span>
+            <span class="s0">sortedList = durationSort(list, ascending)</span>
+            <span class="s1">break</span>
+        <span class="s1">case </span><span class="s2">'result'</span><span class="s0">:</span>
+            <span class="s0">sortedList = genericSort(list, type, ascending, initialOrder)</span>
+            <span class="s1">break</span>
+        <span class="s1">default</span><span class="s0">:</span>
+            <span class="s0">sortedList = genericSort(list, type, ascending)</span>
+            <span class="s1">break</span>
+        <span class="s0">}</span>
+        <span class="s0">manager.setRender(sortedList)</span>
+    <span class="s0">}</span>
+<span class="s0">}</span>
+
+<span class="s0">const doSort = (type, skipDirection) =&gt; {</span>
+    <span class="s0">const newSortType = storageModule.getSort(manager.initialSort) !== type</span>
+    <span class="s0">const currentAsc = storageModule.getSortDirection()</span>
+    <span class="s0">let ascending</span>
+    <span class="s1">if </span><span class="s0">(skipDirection) {</span>
+        <span class="s0">ascending = currentAsc</span>
+    <span class="s0">} </span><span class="s1">else </span><span class="s0">{</span>
+        <span class="s0">ascending = newSortType ? </span><span class="s1">false </span><span class="s0">: !currentAsc</span>
+    <span class="s0">}</span>
+    <span class="s0">storageModule.setSort(type)</span>
+    <span class="s0">storageModule.setSortDirection(ascending)</span>
+
+    <span class="s0">const list = manager.testSubset</span>
+    <span class="s0">const sortedList = type === </span><span class="s2">'duration' </span><span class="s0">? durationSort(list, ascending) : genericSort(list, type, ascending)</span>
+    <span class="s0">manager.setRender(sortedList)</span>
+<span class="s0">}</span>
+
+<span class="s0">module.exports = {</span>
+    <span class="s0">doInitSort,</span>
+    <span class="s0">doSort,</span>
+<span class="s0">}</span>
+
+<span class="s0">},{</span><span class="s2">&quot;./datamanager.js&quot;</span><span class="s0">:</span><span class="s3">1</span><span class="s0">,</span><span class="s2">&quot;./storage.js&quot;</span><span class="s0">:</span><span class="s3">8</span><span class="s0">}],</span><span class="s3">8</span><span class="s0">:[</span><span class="s1">function</span><span class="s0">(require,module,exports){</span>
+<span class="s0">const possibleFilters = [</span>
+    <span class="s2">'passed'</span><span class="s0">,</span>
+    <span class="s2">'skipped'</span><span class="s0">,</span>
+    <span class="s2">'failed'</span><span class="s0">,</span>
+    <span class="s2">'error'</span><span class="s0">,</span>
+    <span class="s2">'xfailed'</span><span class="s0">,</span>
+    <span class="s2">'xpassed'</span><span class="s0">,</span>
+    <span class="s2">'rerun'</span><span class="s0">,</span>
+<span class="s0">]</span>
+
+<span class="s0">const getVisible = () =&gt; {</span>
+    <span class="s0">const url = </span><span class="s1">new </span><span class="s0">URL(window.location.href)</span>
+    <span class="s0">const settings = </span><span class="s1">new </span><span class="s0">URLSearchParams(url.search).get(</span><span class="s2">'visible'</span><span class="s0">)</span>
+    <span class="s0">const lower = (item) =&gt; {</span>
+        <span class="s0">const lowerItem = item.toLowerCase()</span>
+        <span class="s1">if </span><span class="s0">(possibleFilters.includes(lowerItem)) {</span>
+            <span class="s1">return </span><span class="s0">lowerItem</span>
+        <span class="s0">}</span>
+        <span class="s1">return null</span>
+    <span class="s0">}</span>
+    <span class="s1">return </span><span class="s0">settings === </span><span class="s1">null </span><span class="s0">?</span>
+        <span class="s0">possibleFilters :</span>
+        <span class="s0">[...</span><span class="s1">new </span><span class="s0">Set(settings?.split(</span><span class="s2">','</span><span class="s0">).map(lower).filter((item) =&gt; item))]</span>
+<span class="s0">}</span>
+
+<span class="s0">const hideCategory = (categoryToHide) =&gt; {</span>
+    <span class="s0">const url = </span><span class="s1">new </span><span class="s0">URL(window.location.href)</span>
+    <span class="s0">const visibleParams = </span><span class="s1">new </span><span class="s0">URLSearchParams(url.search).get(</span><span class="s2">'visible'</span><span class="s0">)</span>
+    <span class="s0">const currentVisible = visibleParams ? visibleParams.split(</span><span class="s2">','</span><span class="s0">) : [...possibleFilters]</span>
+    <span class="s0">const settings = [...</span><span class="s1">new </span><span class="s0">Set(currentVisible)].filter((f) =&gt; f !== categoryToHide).join(</span><span class="s2">','</span><span class="s0">)</span>
+
+    <span class="s0">url.searchParams.set(</span><span class="s2">'visible'</span><span class="s0">, settings)</span>
+    <span class="s0">window.history.pushState({}, </span><span class="s1">null</span><span class="s0">, unescape(url.href))</span>
+<span class="s0">}</span>
+
+<span class="s0">const showCategory = (categoryToShow) =&gt; {</span>
+    <span class="s1">if </span><span class="s0">(</span><span class="s1">typeof </span><span class="s0">window === </span><span class="s2">'undefined'</span><span class="s0">) {</span>
+        <span class="s1">return</span>
+    <span class="s0">}</span>
+    <span class="s0">const url = </span><span class="s1">new </span><span class="s0">URL(window.location.href)</span>
+    <span class="s0">const currentVisible = </span><span class="s1">new </span><span class="s0">URLSearchParams(url.search).get(</span><span class="s2">'visible'</span><span class="s0">)?.split(</span><span class="s2">','</span><span class="s0">).filter(Boolean) ||</span>
+        <span class="s0">[...possibleFilters]</span>
+    <span class="s0">const settings = [...</span><span class="s1">new </span><span class="s0">Set([categoryToShow, ...currentVisible])]</span>
+    <span class="s0">const noFilter = possibleFilters.length === settings.length || !settings.length</span>
+
+    <span class="s0">noFilter ? url.searchParams.</span><span class="s1">delete</span><span class="s0">(</span><span class="s2">'visible'</span><span class="s0">) : url.searchParams.set(</span><span class="s2">'visible'</span><span class="s0">, settings.join(</span><span class="s2">','</span><span class="s0">))</span>
+    <span class="s0">window.history.pushState({}, </span><span class="s1">null</span><span class="s0">, unescape(url.href))</span>
+<span class="s0">}</span>
+
+<span class="s0">const getSort = (initialSort) =&gt; {</span>
+    <span class="s0">const url = </span><span class="s1">new </span><span class="s0">URL(window.location.href)</span>
+    <span class="s0">let sort = </span><span class="s1">new </span><span class="s0">URLSearchParams(url.search).get(</span><span class="s2">'sort'</span><span class="s0">)</span>
+    <span class="s1">if </span><span class="s0">(!sort) {</span>
+        <span class="s0">sort = initialSort || </span><span class="s2">'result'</span>
+    <span class="s0">}</span>
+    <span class="s1">return </span><span class="s0">sort</span>
+<span class="s0">}</span>
+
+<span class="s0">const setSort = (type) =&gt; {</span>
+    <span class="s0">const url = </span><span class="s1">new </span><span class="s0">URL(window.location.href)</span>
+    <span class="s0">url.searchParams.set(</span><span class="s2">'sort'</span><span class="s0">, type)</span>
+    <span class="s0">window.history.pushState({}, </span><span class="s1">null</span><span class="s0">, unescape(url.href))</span>
+<span class="s0">}</span>
+
+<span class="s0">const getCollapsedCategory = (renderCollapsed) =&gt; {</span>
+    <span class="s0">let categories</span>
+    <span class="s1">if </span><span class="s0">(</span><span class="s1">typeof </span><span class="s0">window !== </span><span class="s2">'undefined'</span><span class="s0">) {</span>
+        <span class="s0">const url = </span><span class="s1">new </span><span class="s0">URL(window.location.href)</span>
+        <span class="s0">const collapsedItems = </span><span class="s1">new </span><span class="s0">URLSearchParams(url.search).get(</span><span class="s2">'collapsed'</span><span class="s0">)</span>
+        <span class="s1">switch </span><span class="s0">(</span><span class="s1">true</span><span class="s0">) {</span>
+        <span class="s1">case </span><span class="s0">!renderCollapsed &amp;&amp; collapsedItems === </span><span class="s1">null</span><span class="s0">:</span>
+            <span class="s0">categories = [</span><span class="s2">'passed'</span><span class="s0">]</span>
+            <span class="s1">break</span>
+        <span class="s1">case </span><span class="s0">collapsedItems?.length === </span><span class="s3">0 </span><span class="s0">|| /^[</span><span class="s2">&quot;']{2}$/.test(collapsedItems):</span>
+            <span class="s0">categories = []</span>
+            <span class="s1">break</span>
+        <span class="s1">case </span><span class="s0">/^all$/.test(collapsedItems) || collapsedItems === </span><span class="s1">null </span><span class="s0">&amp;&amp; /^all$/.test(renderCollapsed):</span>
+            <span class="s0">categories = [...possibleFilters]</span>
+            <span class="s1">break</span>
+        <span class="s1">default</span><span class="s0">:</span>
+            <span class="s0">categories = collapsedItems?.split(</span><span class="s2">','</span><span class="s0">).map((item) =&gt; item.toLowerCase()) || renderCollapsed</span>
+            <span class="s1">break</span>
+        <span class="s0">}</span>
+    <span class="s0">} </span><span class="s1">else </span><span class="s0">{</span>
+        <span class="s0">categories = []</span>
+    <span class="s0">}</span>
+    <span class="s1">return </span><span class="s0">categories</span>
+<span class="s0">}</span>
+
+<span class="s0">const getSortDirection = () =&gt; JSON.parse(sessionStorage.getItem(</span><span class="s2">'sortAsc'</span><span class="s0">)) || </span><span class="s1">false</span>
+<span class="s0">const setSortDirection = (ascending) =&gt; sessionStorage.setItem(</span><span class="s2">'sortAsc'</span><span class="s0">, ascending)</span>
+
+<span class="s0">const getCollapsedIds = () =&gt; JSON.parse(sessionStorage.getItem(</span><span class="s2">'collapsedIds'</span><span class="s0">)) || []</span>
+<span class="s0">const setCollapsedIds = (list) =&gt; sessionStorage.setItem(</span><span class="s2">'collapsedIds'</span><span class="s0">, JSON.stringify(list))</span>
+
+<span class="s0">module.exports = {</span>
+    <span class="s0">getVisible,</span>
+    <span class="s0">hideCategory,</span>
+    <span class="s0">showCategory,</span>
+    <span class="s0">getCollapsedIds,</span>
+    <span class="s0">setCollapsedIds,</span>
+    <span class="s0">getSort,</span>
+    <span class="s0">setSort,</span>
+    <span class="s0">getSortDirection,</span>
+    <span class="s0">setSortDirection,</span>
+    <span class="s0">getCollapsedCategory,</span>
+    <span class="s0">possibleFilters,</span>
+<span class="s0">}</span>
+
+<span class="s0">},{}]},{},[</span><span class="s3">4</span><span class="s0">]);</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<html>
+<head>
+<title>report.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #7a7e85;}
+.s4 { color: #6aab73;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+report.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">base64</span>
+<span class="s0">import </span><span class="s1">binascii</span>
+<span class="s0">from </span><span class="s1">pathlib </span><span class="s0">import </span><span class="s1">Path</span>
+
+<span class="s0">from </span><span class="s1">pytest_html</span><span class="s2">.</span><span class="s1">basereport </span><span class="s0">import </span><span class="s1">BaseReport</span>
+
+<span class="s3"># This Source Code Form is subject to the terms of the Mozilla Public</span>
+<span class="s3"># License, v. 2.0. If a copy of the MPL was not distributed with this</span>
+<span class="s3"># file, You can obtain one at http://mozilla.org/MPL/2.0/.</span>
+
+
+<span class="s0">class </span><span class="s1">Report</span><span class="s2">(</span><span class="s1">BaseReport</span><span class="s2">):</span>
+    <span class="s0">def </span><span class="s1">__init__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">report_path</span><span class="s2">, </span><span class="s1">config</span><span class="s2">, </span><span class="s1">report_data</span><span class="s2">, </span><span class="s1">template</span><span class="s2">, </span><span class="s1">css</span><span class="s2">):</span>
+        <span class="s1">super</span><span class="s2">().</span><span class="s1">__init__</span><span class="s2">(</span><span class="s1">report_path</span><span class="s2">, </span><span class="s1">config</span><span class="s2">, </span><span class="s1">report_data</span><span class="s2">, </span><span class="s1">template</span><span class="s2">, </span><span class="s1">css</span><span class="s2">)</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">_assets_path </span><span class="s2">= </span><span class="s1">Path</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">_report_path</span><span class="s2">.</span><span class="s1">parent</span><span class="s2">, </span><span class="s4">&quot;assets&quot;</span><span class="s2">)</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">_assets_path</span><span class="s2">.</span><span class="s1">mkdir</span><span class="s2">(</span><span class="s1">parents</span><span class="s2">=</span><span class="s0">True</span><span class="s2">, </span><span class="s1">exist_ok</span><span class="s2">=</span><span class="s0">True</span><span class="s2">)</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">_css_path </span><span class="s2">= </span><span class="s1">Path</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">_assets_path</span><span class="s2">, </span><span class="s4">&quot;style.css&quot;</span><span class="s2">)</span>
+
+        <span class="s0">with </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_css_path</span><span class="s2">.</span><span class="s1">open</span><span class="s2">(</span><span class="s4">&quot;w&quot;</span><span class="s2">, </span><span class="s1">encoding</span><span class="s2">=</span><span class="s4">&quot;utf-8&quot;</span><span class="s2">) </span><span class="s0">as </span><span class="s1">f</span><span class="s2">:</span>
+            <span class="s1">f</span><span class="s2">.</span><span class="s1">write</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">_css</span><span class="s2">)</span>
+
+    <span class="s2">@</span><span class="s1">property</span>
+    <span class="s0">def </span><span class="s1">css</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):</span>
+        <span class="s0">return </span><span class="s1">Path</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">_assets_path</span><span class="s2">.</span><span class="s1">name</span><span class="s2">, </span><span class="s4">&quot;style.css&quot;</span><span class="s2">)</span>
+
+    <span class="s0">def </span><span class="s1">_data_content</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">content</span><span class="s2">, </span><span class="s1">asset_name</span><span class="s2">, *</span><span class="s1">args</span><span class="s2">, **</span><span class="s1">kwargs</span><span class="s2">):</span>
+        <span class="s1">content </span><span class="s2">= </span><span class="s1">content</span><span class="s2">.</span><span class="s1">encode</span><span class="s2">(</span><span class="s4">&quot;utf-8&quot;</span><span class="s2">)</span>
+        <span class="s0">return </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_write_content</span><span class="s2">(</span><span class="s1">content</span><span class="s2">, </span><span class="s1">asset_name</span><span class="s2">)</span>
+
+    <span class="s0">def </span><span class="s1">_media_content</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">content</span><span class="s2">, </span><span class="s1">asset_name</span><span class="s2">, *</span><span class="s1">args</span><span class="s2">, **</span><span class="s1">kwargs</span><span class="s2">):</span>
+        <span class="s0">try</span><span class="s2">:</span>
+            <span class="s1">media_data </span><span class="s2">= </span><span class="s1">base64</span><span class="s2">.</span><span class="s1">b64decode</span><span class="s2">(</span><span class="s1">content</span><span class="s2">.</span><span class="s1">encode</span><span class="s2">(</span><span class="s4">&quot;utf-8&quot;</span><span class="s2">), </span><span class="s1">validate</span><span class="s2">=</span><span class="s0">True</span><span class="s2">)</span>
+            <span class="s0">return </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_write_content</span><span class="s2">(</span><span class="s1">media_data</span><span class="s2">, </span><span class="s1">asset_name</span><span class="s2">)</span>
+        <span class="s0">except </span><span class="s1">binascii</span><span class="s2">.</span><span class="s1">Error</span><span class="s2">:</span>
+            <span class="s3"># if not base64 content, just return as it's a file or link</span>
+            <span class="s0">return </span><span class="s1">content</span>
+
+    <span class="s0">def </span><span class="s1">_write_content</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">content</span><span class="s2">, </span><span class="s1">asset_name</span><span class="s2">):</span>
+        <span class="s1">content_relative_path </span><span class="s2">= </span><span class="s1">Path</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">_assets_path</span><span class="s2">, </span><span class="s1">asset_name</span><span class="s2">)</span>
+        <span class="s1">content_relative_path</span><span class="s2">.</span><span class="s1">write_bytes</span><span class="s2">(</span><span class="s1">content</span><span class="s2">)</span>
+        <span class="s0">return </span><span class="s1">str</span><span class="s2">(</span><span class="s1">content_relative_path</span><span class="s2">.</span><span class="s1">relative_to</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">_report_path</span><span class="s2">.</span><span class="s1">parent</span><span class="s2">))</span>
+</pre>
+</body>
+</html>

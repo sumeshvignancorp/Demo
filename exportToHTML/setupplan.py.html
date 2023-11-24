@@ -1,0 +1,61 @@
+<html>
+<head>
+<title>setupplan.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #6aab73;}
+.s4 { color: #7a7e85;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+setupplan.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Optional</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Union</span>
+
+<span class="s0">import </span><span class="s1">pytest</span>
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">config </span><span class="s0">import </span><span class="s1">Config</span>
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">config </span><span class="s0">import </span><span class="s1">ExitCode</span>
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">config</span><span class="s2">.</span><span class="s1">argparsing </span><span class="s0">import </span><span class="s1">Parser</span>
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">fixtures </span><span class="s0">import </span><span class="s1">FixtureDef</span>
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">fixtures </span><span class="s0">import </span><span class="s1">SubRequest</span>
+
+
+<span class="s0">def </span><span class="s1">pytest_addoption</span><span class="s2">(</span><span class="s1">parser</span><span class="s2">: </span><span class="s1">Parser</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+    <span class="s1">group </span><span class="s2">= </span><span class="s1">parser</span><span class="s2">.</span><span class="s1">getgroup</span><span class="s2">(</span><span class="s3">&quot;debugconfig&quot;</span><span class="s2">)</span>
+    <span class="s1">group</span><span class="s2">.</span><span class="s1">addoption</span><span class="s2">(</span>
+        <span class="s3">&quot;--setupplan&quot;</span><span class="s2">,</span>
+        <span class="s3">&quot;--setup-plan&quot;</span><span class="s2">,</span>
+        <span class="s1">action</span><span class="s2">=</span><span class="s3">&quot;store_true&quot;</span><span class="s2">,</span>
+        <span class="s1">help</span><span class="s2">=</span><span class="s3">&quot;Show what fixtures and tests would be executed but &quot;</span>
+        <span class="s3">&quot;don't execute anything&quot;</span><span class="s2">,</span>
+    <span class="s2">)</span>
+
+
+<span class="s2">@</span><span class="s1">pytest</span><span class="s2">.</span><span class="s1">hookimpl</span><span class="s2">(</span><span class="s1">tryfirst</span><span class="s2">=</span><span class="s0">True</span><span class="s2">)</span>
+<span class="s0">def </span><span class="s1">pytest_fixture_setup</span><span class="s2">(</span>
+    <span class="s1">fixturedef</span><span class="s2">: </span><span class="s1">FixtureDef</span><span class="s2">[</span><span class="s1">object</span><span class="s2">], </span><span class="s1">request</span><span class="s2">: </span><span class="s1">SubRequest</span>
+<span class="s2">) </span><span class="s1">-&gt; Optional</span><span class="s2">[</span><span class="s1">object</span><span class="s2">]:</span>
+    <span class="s4"># Will return a dummy fixture if the setuponly option is provided.</span>
+    <span class="s0">if </span><span class="s1">request</span><span class="s2">.</span><span class="s1">config</span><span class="s2">.</span><span class="s1">option</span><span class="s2">.</span><span class="s1">setupplan</span><span class="s2">:</span>
+        <span class="s1">my_cache_key </span><span class="s2">= </span><span class="s1">fixturedef</span><span class="s2">.</span><span class="s1">cache_key</span><span class="s2">(</span><span class="s1">request</span><span class="s2">)</span>
+        <span class="s1">fixturedef</span><span class="s2">.</span><span class="s1">cached_result </span><span class="s2">= (</span><span class="s0">None</span><span class="s2">, </span><span class="s1">my_cache_key</span><span class="s2">, </span><span class="s0">None</span><span class="s2">)</span>
+        <span class="s0">return </span><span class="s1">fixturedef</span><span class="s2">.</span><span class="s1">cached_result</span>
+    <span class="s0">return None</span>
+
+
+<span class="s2">@</span><span class="s1">pytest</span><span class="s2">.</span><span class="s1">hookimpl</span><span class="s2">(</span><span class="s1">tryfirst</span><span class="s2">=</span><span class="s0">True</span><span class="s2">)</span>
+<span class="s0">def </span><span class="s1">pytest_cmdline_main</span><span class="s2">(</span><span class="s1">config</span><span class="s2">: </span><span class="s1">Config</span><span class="s2">) </span><span class="s1">-&gt; Optional</span><span class="s2">[</span><span class="s1">Union</span><span class="s2">[</span><span class="s1">int</span><span class="s2">, </span><span class="s1">ExitCode</span><span class="s2">]]:</span>
+    <span class="s0">if </span><span class="s1">config</span><span class="s2">.</span><span class="s1">option</span><span class="s2">.</span><span class="s1">setupplan</span><span class="s2">:</span>
+        <span class="s1">config</span><span class="s2">.</span><span class="s1">option</span><span class="s2">.</span><span class="s1">setuponly </span><span class="s2">= </span><span class="s0">True</span>
+        <span class="s1">config</span><span class="s2">.</span><span class="s1">option</span><span class="s2">.</span><span class="s1">setupshow </span><span class="s2">= </span><span class="s0">True</span>
+    <span class="s0">return None</span>
+</pre>
+</body>
+</html>

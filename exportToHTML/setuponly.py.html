@@ -1,0 +1,119 @@
+<html>
+<head>
+<title>setuponly.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #6aab73;}
+.s4 { color: #7a7e85;}
+.s5 { color: #2aacb8;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+setuponly.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Generator</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Optional</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Union</span>
+
+<span class="s0">import </span><span class="s1">pytest</span>
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">_io</span><span class="s2">.</span><span class="s1">saferepr </span><span class="s0">import </span><span class="s1">saferepr</span>
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">config </span><span class="s0">import </span><span class="s1">Config</span>
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">config </span><span class="s0">import </span><span class="s1">ExitCode</span>
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">config</span><span class="s2">.</span><span class="s1">argparsing </span><span class="s0">import </span><span class="s1">Parser</span>
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">fixtures </span><span class="s0">import </span><span class="s1">FixtureDef</span>
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">fixtures </span><span class="s0">import </span><span class="s1">SubRequest</span>
+<span class="s0">from </span><span class="s1">_pytest</span><span class="s2">.</span><span class="s1">scope </span><span class="s0">import </span><span class="s1">Scope</span>
+
+
+<span class="s0">def </span><span class="s1">pytest_addoption</span><span class="s2">(</span><span class="s1">parser</span><span class="s2">: </span><span class="s1">Parser</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+    <span class="s1">group </span><span class="s2">= </span><span class="s1">parser</span><span class="s2">.</span><span class="s1">getgroup</span><span class="s2">(</span><span class="s3">&quot;debugconfig&quot;</span><span class="s2">)</span>
+    <span class="s1">group</span><span class="s2">.</span><span class="s1">addoption</span><span class="s2">(</span>
+        <span class="s3">&quot;--setuponly&quot;</span><span class="s2">,</span>
+        <span class="s3">&quot;--setup-only&quot;</span><span class="s2">,</span>
+        <span class="s1">action</span><span class="s2">=</span><span class="s3">&quot;store_true&quot;</span><span class="s2">,</span>
+        <span class="s1">help</span><span class="s2">=</span><span class="s3">&quot;Only setup fixtures, do not execute tests&quot;</span><span class="s2">,</span>
+    <span class="s2">)</span>
+    <span class="s1">group</span><span class="s2">.</span><span class="s1">addoption</span><span class="s2">(</span>
+        <span class="s3">&quot;--setupshow&quot;</span><span class="s2">,</span>
+        <span class="s3">&quot;--setup-show&quot;</span><span class="s2">,</span>
+        <span class="s1">action</span><span class="s2">=</span><span class="s3">&quot;store_true&quot;</span><span class="s2">,</span>
+        <span class="s1">help</span><span class="s2">=</span><span class="s3">&quot;Show setup of fixtures while executing tests&quot;</span><span class="s2">,</span>
+    <span class="s2">)</span>
+
+
+<span class="s2">@</span><span class="s1">pytest</span><span class="s2">.</span><span class="s1">hookimpl</span><span class="s2">(</span><span class="s1">hookwrapper</span><span class="s2">=</span><span class="s0">True</span><span class="s2">)</span>
+<span class="s0">def </span><span class="s1">pytest_fixture_setup</span><span class="s2">(</span>
+    <span class="s1">fixturedef</span><span class="s2">: </span><span class="s1">FixtureDef</span><span class="s2">[</span><span class="s1">object</span><span class="s2">], </span><span class="s1">request</span><span class="s2">: </span><span class="s1">SubRequest</span>
+<span class="s2">) </span><span class="s1">-&gt; Generator</span><span class="s2">[</span><span class="s0">None</span><span class="s2">, </span><span class="s0">None</span><span class="s2">, </span><span class="s0">None</span><span class="s2">]:</span>
+    <span class="s0">yield</span>
+    <span class="s0">if </span><span class="s1">request</span><span class="s2">.</span><span class="s1">config</span><span class="s2">.</span><span class="s1">option</span><span class="s2">.</span><span class="s1">setupshow</span><span class="s2">:</span>
+        <span class="s0">if </span><span class="s1">hasattr</span><span class="s2">(</span><span class="s1">request</span><span class="s2">, </span><span class="s3">&quot;param&quot;</span><span class="s2">):</span>
+            <span class="s4"># Save the fixture parameter so ._show_fixture_action() can</span>
+            <span class="s4"># display it now and during the teardown (in .finish()).</span>
+            <span class="s0">if </span><span class="s1">fixturedef</span><span class="s2">.</span><span class="s1">ids</span><span class="s2">:</span>
+                <span class="s0">if </span><span class="s1">callable</span><span class="s2">(</span><span class="s1">fixturedef</span><span class="s2">.</span><span class="s1">ids</span><span class="s2">):</span>
+                    <span class="s1">param </span><span class="s2">= </span><span class="s1">fixturedef</span><span class="s2">.</span><span class="s1">ids</span><span class="s2">(</span><span class="s1">request</span><span class="s2">.</span><span class="s1">param</span><span class="s2">)</span>
+                <span class="s0">else</span><span class="s2">:</span>
+                    <span class="s1">param </span><span class="s2">= </span><span class="s1">fixturedef</span><span class="s2">.</span><span class="s1">ids</span><span class="s2">[</span><span class="s1">request</span><span class="s2">.</span><span class="s1">param_index</span><span class="s2">]</span>
+            <span class="s0">else</span><span class="s2">:</span>
+                <span class="s1">param </span><span class="s2">= </span><span class="s1">request</span><span class="s2">.</span><span class="s1">param</span>
+            <span class="s1">fixturedef</span><span class="s2">.</span><span class="s1">cached_param </span><span class="s2">= </span><span class="s1">param  </span><span class="s4"># type: ignore[attr-defined]</span>
+        <span class="s1">_show_fixture_action</span><span class="s2">(</span><span class="s1">fixturedef</span><span class="s2">, </span><span class="s3">&quot;SETUP&quot;</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">pytest_fixture_post_finalizer</span><span class="s2">(</span><span class="s1">fixturedef</span><span class="s2">: </span><span class="s1">FixtureDef</span><span class="s2">[</span><span class="s1">object</span><span class="s2">]) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+    <span class="s0">if </span><span class="s1">fixturedef</span><span class="s2">.</span><span class="s1">cached_result </span><span class="s0">is not None</span><span class="s2">:</span>
+        <span class="s1">config </span><span class="s2">= </span><span class="s1">fixturedef</span><span class="s2">.</span><span class="s1">_fixturemanager</span><span class="s2">.</span><span class="s1">config</span>
+        <span class="s0">if </span><span class="s1">config</span><span class="s2">.</span><span class="s1">option</span><span class="s2">.</span><span class="s1">setupshow</span><span class="s2">:</span>
+            <span class="s1">_show_fixture_action</span><span class="s2">(</span><span class="s1">fixturedef</span><span class="s2">, </span><span class="s3">&quot;TEARDOWN&quot;</span><span class="s2">)</span>
+            <span class="s0">if </span><span class="s1">hasattr</span><span class="s2">(</span><span class="s1">fixturedef</span><span class="s2">, </span><span class="s3">&quot;cached_param&quot;</span><span class="s2">):</span>
+                <span class="s0">del </span><span class="s1">fixturedef</span><span class="s2">.</span><span class="s1">cached_param  </span><span class="s4"># type: ignore[attr-defined]</span>
+
+
+<span class="s0">def </span><span class="s1">_show_fixture_action</span><span class="s2">(</span><span class="s1">fixturedef</span><span class="s2">: </span><span class="s1">FixtureDef</span><span class="s2">[</span><span class="s1">object</span><span class="s2">], </span><span class="s1">msg</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+    <span class="s1">config </span><span class="s2">= </span><span class="s1">fixturedef</span><span class="s2">.</span><span class="s1">_fixturemanager</span><span class="s2">.</span><span class="s1">config</span>
+    <span class="s1">capman </span><span class="s2">= </span><span class="s1">config</span><span class="s2">.</span><span class="s1">pluginmanager</span><span class="s2">.</span><span class="s1">getplugin</span><span class="s2">(</span><span class="s3">&quot;capturemanager&quot;</span><span class="s2">)</span>
+    <span class="s0">if </span><span class="s1">capman</span><span class="s2">:</span>
+        <span class="s1">capman</span><span class="s2">.</span><span class="s1">suspend_global_capture</span><span class="s2">()</span>
+
+    <span class="s1">tw </span><span class="s2">= </span><span class="s1">config</span><span class="s2">.</span><span class="s1">get_terminal_writer</span><span class="s2">()</span>
+    <span class="s1">tw</span><span class="s2">.</span><span class="s1">line</span><span class="s2">()</span>
+    <span class="s4"># Use smaller indentation the higher the scope: Session = 0, Package = 1, etc.</span>
+    <span class="s1">scope_indent </span><span class="s2">= </span><span class="s1">list</span><span class="s2">(</span><span class="s1">reversed</span><span class="s2">(</span><span class="s1">Scope</span><span class="s2">)).</span><span class="s1">index</span><span class="s2">(</span><span class="s1">fixturedef</span><span class="s2">.</span><span class="s1">_scope</span><span class="s2">)</span>
+    <span class="s1">tw</span><span class="s2">.</span><span class="s1">write</span><span class="s2">(</span><span class="s3">&quot; &quot; </span><span class="s2">* </span><span class="s5">2 </span><span class="s2">* </span><span class="s1">scope_indent</span><span class="s2">)</span>
+    <span class="s1">tw</span><span class="s2">.</span><span class="s1">write</span><span class="s2">(</span>
+        <span class="s3">&quot;{step} {scope} {fixture}&quot;</span><span class="s2">.</span><span class="s1">format</span><span class="s2">(</span>
+            <span class="s1">step</span><span class="s2">=</span><span class="s1">msg</span><span class="s2">.</span><span class="s1">ljust</span><span class="s2">(</span><span class="s5">8</span><span class="s2">),  </span><span class="s4"># align the output to TEARDOWN</span>
+            <span class="s1">scope</span><span class="s2">=</span><span class="s1">fixturedef</span><span class="s2">.</span><span class="s1">scope</span><span class="s2">[</span><span class="s5">0</span><span class="s2">].</span><span class="s1">upper</span><span class="s2">(),</span>
+            <span class="s1">fixture</span><span class="s2">=</span><span class="s1">fixturedef</span><span class="s2">.</span><span class="s1">argname</span><span class="s2">,</span>
+        <span class="s2">)</span>
+    <span class="s2">)</span>
+
+    <span class="s0">if </span><span class="s1">msg </span><span class="s2">== </span><span class="s3">&quot;SETUP&quot;</span><span class="s2">:</span>
+        <span class="s1">deps </span><span class="s2">= </span><span class="s1">sorted</span><span class="s2">(</span><span class="s1">arg </span><span class="s0">for </span><span class="s1">arg </span><span class="s0">in </span><span class="s1">fixturedef</span><span class="s2">.</span><span class="s1">argnames </span><span class="s0">if </span><span class="s1">arg </span><span class="s2">!= </span><span class="s3">&quot;request&quot;</span><span class="s2">)</span>
+        <span class="s0">if </span><span class="s1">deps</span><span class="s2">:</span>
+            <span class="s1">tw</span><span class="s2">.</span><span class="s1">write</span><span class="s2">(</span><span class="s3">&quot; (fixtures used: {})&quot;</span><span class="s2">.</span><span class="s1">format</span><span class="s2">(</span><span class="s3">&quot;, &quot;</span><span class="s2">.</span><span class="s1">join</span><span class="s2">(</span><span class="s1">deps</span><span class="s2">)))</span>
+
+    <span class="s0">if </span><span class="s1">hasattr</span><span class="s2">(</span><span class="s1">fixturedef</span><span class="s2">, </span><span class="s3">&quot;cached_param&quot;</span><span class="s2">):</span>
+        <span class="s1">tw</span><span class="s2">.</span><span class="s1">write</span><span class="s2">(</span><span class="s3">f&quot;[</span><span class="s0">{</span><span class="s1">saferepr</span><span class="s2">(</span><span class="s1">fixturedef</span><span class="s2">.</span><span class="s1">cached_param</span><span class="s2">, </span><span class="s1">maxsize</span><span class="s2">=</span><span class="s5">42</span><span class="s2">)</span><span class="s0">}</span><span class="s3">]&quot;</span><span class="s2">)  </span><span class="s4"># type: ignore[attr-defined]</span>
+
+    <span class="s1">tw</span><span class="s2">.</span><span class="s1">flush</span><span class="s2">()</span>
+
+    <span class="s0">if </span><span class="s1">capman</span><span class="s2">:</span>
+        <span class="s1">capman</span><span class="s2">.</span><span class="s1">resume_global_capture</span><span class="s2">()</span>
+
+
+<span class="s2">@</span><span class="s1">pytest</span><span class="s2">.</span><span class="s1">hookimpl</span><span class="s2">(</span><span class="s1">tryfirst</span><span class="s2">=</span><span class="s0">True</span><span class="s2">)</span>
+<span class="s0">def </span><span class="s1">pytest_cmdline_main</span><span class="s2">(</span><span class="s1">config</span><span class="s2">: </span><span class="s1">Config</span><span class="s2">) </span><span class="s1">-&gt; Optional</span><span class="s2">[</span><span class="s1">Union</span><span class="s2">[</span><span class="s1">int</span><span class="s2">, </span><span class="s1">ExitCode</span><span class="s2">]]:</span>
+    <span class="s0">if </span><span class="s1">config</span><span class="s2">.</span><span class="s1">option</span><span class="s2">.</span><span class="s1">setuponly</span><span class="s2">:</span>
+        <span class="s1">config</span><span class="s2">.</span><span class="s1">option</span><span class="s2">.</span><span class="s1">setupshow </span><span class="s2">= </span><span class="s0">True</span>
+    <span class="s0">return None</span>
+</pre>
+</body>
+</html>

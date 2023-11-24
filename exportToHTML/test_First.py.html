@@ -1,0 +1,80 @@
+<html>
+<head>
+<title>test_First.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #6aab73;}
+.s4 { color: #2aacb8;}
+.s5 { color: #7a7e85;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+test_First.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">time</span>
+<span class="s0">from </span><span class="s1">datetime </span><span class="s0">import </span><span class="s1">datetime</span>
+
+<span class="s0">from </span><span class="s1">selenium </span><span class="s0">import </span><span class="s1">webdriver</span>
+<span class="s0">from </span><span class="s1">selenium</span><span class="s2">.</span><span class="s1">webdriver</span><span class="s2">.</span><span class="s1">chrome</span><span class="s2">.</span><span class="s1">service </span><span class="s0">import </span><span class="s1">Service </span><span class="s0">as </span><span class="s1">ChromeService</span>
+<span class="s0">from </span><span class="s1">webdriver_manager</span><span class="s2">.</span><span class="s1">chrome </span><span class="s0">import </span><span class="s1">ChromeDriverManager</span>
+
+
+<span class="s0">def </span><span class="s1">test_login_valid_credentials</span><span class="s2">():</span>
+    <span class="s1">driver </span><span class="s2">= </span><span class="s1">webdriver</span><span class="s2">.</span><span class="s1">Chrome</span><span class="s2">(</span><span class="s1">service</span><span class="s2">=</span><span class="s1">ChromeService</span><span class="s2">(</span><span class="s1">ChromeDriverManager</span><span class="s2">().</span><span class="s1">install</span><span class="s2">()))</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">maximize_window</span><span class="s2">()</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">get</span><span class="s2">(</span><span class="s3">&quot;https://pg.ajnaview.net/&quot;</span><span class="s2">)</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s4">5</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s3">&quot;name&quot;</span><span class="s2">, </span><span class="s3">&quot;email&quot;</span><span class="s2">).</span><span class="s1">send_keys</span><span class="s2">(</span><span class="s3">&quot;sumesh@vignancorp.com&quot;</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s3">&quot;name&quot;</span><span class="s2">, </span><span class="s3">&quot;password&quot;</span><span class="s2">).</span><span class="s1">send_keys</span><span class="s2">(</span><span class="s3">&quot;ajNa785#&quot;</span><span class="s2">)</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s4">2</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s3">&quot;xpath&quot;</span><span class="s2">, </span><span class="s3">&quot;(//button[@type='button'])[2]&quot;</span><span class="s2">).</span><span class="s1">click</span><span class="s2">()  </span><span class="s5"># Login Button</span>
+    <span class="s1">print</span><span class="s2">(</span><span class="s3">&quot;Title :&quot;</span><span class="s2">, </span><span class="s1">driver</span><span class="s2">.</span><span class="s1">title</span><span class="s2">)</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s4">10</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">get_screenshot_as_file</span><span class="s2">(</span><span class="s3">&quot;screenshot.png&quot;</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s3">&quot;xpath&quot;</span><span class="s2">, </span><span class="s3">&quot;(//div[@role='button'])[11]&quot;</span><span class="s2">).</span><span class="s1">click</span><span class="s2">()</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s4">6</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">quit</span><span class="s2">()</span>
+
+
+<span class="s0">def </span><span class="s1">test_login_invalid_credentials</span><span class="s2">():</span>
+    <span class="s1">driver </span><span class="s2">= </span><span class="s1">webdriver</span><span class="s2">.</span><span class="s1">Chrome</span><span class="s2">(</span><span class="s1">service</span><span class="s2">=</span><span class="s1">ChromeService</span><span class="s2">(</span><span class="s1">ChromeDriverManager</span><span class="s2">().</span><span class="s1">install</span><span class="s2">()))</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">maximize_window</span><span class="s2">()</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">get</span><span class="s2">(</span><span class="s3">&quot;https://pg.ajnaview.net/&quot;</span><span class="s2">)</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s4">5</span><span class="s2">)</span>
+    <span class="s1">print</span><span class="s2">(</span><span class="s3">&quot;Title 3 :&quot;</span><span class="s2">, </span><span class="s1">driver</span><span class="s2">.</span><span class="s1">title</span><span class="s2">)</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s4">2</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s3">&quot;name&quot;</span><span class="s2">, </span><span class="s3">&quot;email&quot;</span><span class="s2">).</span><span class="s1">send_keys</span><span class="s2">(</span><span class="s1">generate_email_with_time_stamp</span><span class="s2">())</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s3">&quot;name&quot;</span><span class="s2">, </span><span class="s3">&quot;password&quot;</span><span class="s2">).</span><span class="s1">send_keys</span><span class="s2">(</span><span class="s1">generate_email_with_time_stamp</span><span class="s2">())</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s4">2</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s3">&quot;xpath&quot;</span><span class="s2">, </span><span class="s3">&quot;(//button[@type='button'])[2]&quot;</span><span class="s2">).</span><span class="s1">click</span><span class="s2">()  </span><span class="s5"># Login_button</span>
+    <span class="s1">print</span><span class="s2">(</span><span class="s3">&quot;Title 4 :&quot;</span><span class="s2">, </span><span class="s1">driver</span><span class="s2">.</span><span class="s1">title</span><span class="s2">)</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s4">6</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">quit</span><span class="s2">()</span>
+
+
+<span class="s0">def </span><span class="s1">test_login_empty_credentials</span><span class="s2">():</span>
+    <span class="s1">driver </span><span class="s2">= </span><span class="s1">webdriver</span><span class="s2">.</span><span class="s1">Chrome</span><span class="s2">(</span><span class="s1">service</span><span class="s2">=</span><span class="s1">ChromeService</span><span class="s2">(</span><span class="s1">ChromeDriverManager</span><span class="s2">().</span><span class="s1">install</span><span class="s2">()))</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">maximize_window</span><span class="s2">()</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">get</span><span class="s2">(</span><span class="s3">&quot;https://pg.ajnaview.net/&quot;</span><span class="s2">)</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s4">5</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s3">&quot;name&quot;</span><span class="s2">, </span><span class="s3">&quot;email&quot;</span><span class="s2">).</span><span class="s1">send_keys</span><span class="s2">(</span><span class="s3">&quot;&quot;</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s3">&quot;name&quot;</span><span class="s2">, </span><span class="s3">&quot;password&quot;</span><span class="s2">).</span><span class="s1">send_keys</span><span class="s2">(</span><span class="s3">&quot;&quot;</span><span class="s2">)</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s4">2</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s3">&quot;xpath&quot;</span><span class="s2">, </span><span class="s3">&quot;(//button[@type='button'])[2]&quot;</span><span class="s2">).</span><span class="s1">click</span><span class="s2">()</span>
+    <span class="s1">print</span><span class="s2">(</span><span class="s3">&quot;Title :&quot;</span><span class="s2">, </span><span class="s1">driver</span><span class="s2">.</span><span class="s1">title</span><span class="s2">)</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s4">6</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">quit</span><span class="s2">()</span>
+
+
+<span class="s0">def </span><span class="s1">generate_email_with_time_stamp</span><span class="s2">():</span>
+    <span class="s1">time_stamp </span><span class="s2">= </span><span class="s1">datetime</span><span class="s2">.</span><span class="s1">now</span><span class="s2">().</span><span class="s1">strftime</span><span class="s2">(</span><span class="s3">&quot;%H_%M_%S&quot;</span><span class="s2">)  </span><span class="s5"># &quot;%Y_%m_%d_%H_%M_%S&quot;</span>
+    <span class="s0">return </span><span class="s3">&quot;Ab&quot; </span><span class="s2">+ </span><span class="s1">time_stamp </span><span class="s2">+ </span><span class="s3">&quot;@gmail.com&quot;</span>
+</pre>
+</body>
+</html>

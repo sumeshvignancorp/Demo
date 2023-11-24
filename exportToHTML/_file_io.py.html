@@ -1,0 +1,214 @@
+<html>
+<head>
+<title>_file_io.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #7a7e85;}
+.s4 { color: #6aab73;}
+.s5 { color: #5f826b; font-style: italic;}
+.s6 { color: #2aacb8;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+_file_io.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">io</span>
+<span class="s0">from </span><span class="s1">functools </span><span class="s0">import </span><span class="s1">partial</span>
+
+<span class="s0">import </span><span class="s1">trio</span>
+
+<span class="s0">from </span><span class="s2">.</span><span class="s1">_util </span><span class="s0">import </span><span class="s1">async_wraps</span>
+<span class="s0">from </span><span class="s2">.</span><span class="s1">abc </span><span class="s0">import </span><span class="s1">AsyncResource</span>
+
+<span class="s3"># This list is also in the docs, make sure to keep them in sync</span>
+<span class="s1">_FILE_SYNC_ATTRS </span><span class="s2">= {</span>
+    <span class="s4">&quot;closed&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;encoding&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;errors&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;fileno&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;isatty&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;newlines&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;readable&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;seekable&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;writable&quot;</span><span class="s2">,</span>
+    <span class="s3"># not defined in *IOBase:</span>
+    <span class="s4">&quot;buffer&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;raw&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;line_buffering&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;closefd&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;name&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;mode&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;getvalue&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;getbuffer&quot;</span><span class="s2">,</span>
+<span class="s2">}</span>
+
+<span class="s3"># This list is also in the docs, make sure to keep them in sync</span>
+<span class="s1">_FILE_ASYNC_METHODS </span><span class="s2">= {</span>
+    <span class="s4">&quot;flush&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;read&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;read1&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;readall&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;readinto&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;readline&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;readlines&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;seek&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;tell&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;truncate&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;write&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;writelines&quot;</span><span class="s2">,</span>
+    <span class="s3"># not defined in *IOBase:</span>
+    <span class="s4">&quot;readinto1&quot;</span><span class="s2">,</span>
+    <span class="s4">&quot;peek&quot;</span><span class="s2">,</span>
+<span class="s2">}</span>
+
+
+<span class="s0">class </span><span class="s1">AsyncIOWrapper</span><span class="s2">(</span><span class="s1">AsyncResource</span><span class="s2">):</span>
+    <span class="s5">&quot;&quot;&quot;A generic :class:`~io.IOBase` wrapper that implements the :term:`asynchronous 
+    file object` interface. Wrapped methods that could block are executed in 
+    :meth:`trio.to_thread.run_sync`. 
+ 
+    All properties and methods defined in in :mod:`~io` are exposed by this 
+    wrapper, if they exist in the wrapped file object. 
+ 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">file</span><span class="s2">):</span>
+        <span class="s1">self</span><span class="s2">.</span><span class="s1">_wrapped </span><span class="s2">= </span><span class="s1">file</span>
+
+    <span class="s2">@</span><span class="s1">property</span>
+    <span class="s0">def </span><span class="s1">wrapped</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):</span>
+        <span class="s5">&quot;&quot;&quot;object: A reference to the wrapped file object&quot;&quot;&quot;</span>
+
+        <span class="s0">return </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_wrapped</span>
+
+    <span class="s0">def </span><span class="s1">__getattr__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">name</span><span class="s2">):</span>
+        <span class="s0">if </span><span class="s1">name </span><span class="s0">in </span><span class="s1">_FILE_SYNC_ATTRS</span><span class="s2">:</span>
+            <span class="s0">return </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">_wrapped</span><span class="s2">, </span><span class="s1">name</span><span class="s2">)</span>
+        <span class="s0">if </span><span class="s1">name </span><span class="s0">in </span><span class="s1">_FILE_ASYNC_METHODS</span><span class="s2">:</span>
+            <span class="s1">meth </span><span class="s2">= </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">_wrapped</span><span class="s2">, </span><span class="s1">name</span><span class="s2">)</span>
+
+            <span class="s2">@</span><span class="s1">async_wraps</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">__class__</span><span class="s2">, </span><span class="s1">self</span><span class="s2">.</span><span class="s1">_wrapped</span><span class="s2">.</span><span class="s1">__class__</span><span class="s2">, </span><span class="s1">name</span><span class="s2">)</span>
+            <span class="s0">async def </span><span class="s1">wrapper</span><span class="s2">(*</span><span class="s1">args</span><span class="s2">, **</span><span class="s1">kwargs</span><span class="s2">):</span>
+                <span class="s1">func </span><span class="s2">= </span><span class="s1">partial</span><span class="s2">(</span><span class="s1">meth</span><span class="s2">, *</span><span class="s1">args</span><span class="s2">, **</span><span class="s1">kwargs</span><span class="s2">)</span>
+                <span class="s0">return await </span><span class="s1">trio</span><span class="s2">.</span><span class="s1">to_thread</span><span class="s2">.</span><span class="s1">run_sync</span><span class="s2">(</span><span class="s1">func</span><span class="s2">)</span>
+
+            <span class="s3"># cache the generated method</span>
+            <span class="s1">setattr</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">name</span><span class="s2">, </span><span class="s1">wrapper</span><span class="s2">)</span>
+            <span class="s0">return </span><span class="s1">wrapper</span>
+
+        <span class="s0">raise </span><span class="s1">AttributeError</span><span class="s2">(</span><span class="s1">name</span><span class="s2">)</span>
+
+    <span class="s0">def </span><span class="s1">__dir__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):</span>
+        <span class="s1">attrs </span><span class="s2">= </span><span class="s1">set</span><span class="s2">(</span><span class="s1">super</span><span class="s2">().</span><span class="s1">__dir__</span><span class="s2">())</span>
+        <span class="s1">attrs</span><span class="s2">.</span><span class="s1">update</span><span class="s2">(</span><span class="s1">a </span><span class="s0">for </span><span class="s1">a </span><span class="s0">in </span><span class="s1">_FILE_SYNC_ATTRS </span><span class="s0">if </span><span class="s1">hasattr</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">wrapped</span><span class="s2">, </span><span class="s1">a</span><span class="s2">))</span>
+        <span class="s1">attrs</span><span class="s2">.</span><span class="s1">update</span><span class="s2">(</span><span class="s1">a </span><span class="s0">for </span><span class="s1">a </span><span class="s0">in </span><span class="s1">_FILE_ASYNC_METHODS </span><span class="s0">if </span><span class="s1">hasattr</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">wrapped</span><span class="s2">, </span><span class="s1">a</span><span class="s2">))</span>
+        <span class="s0">return </span><span class="s1">attrs</span>
+
+    <span class="s0">def </span><span class="s1">__aiter__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+    <span class="s0">async def </span><span class="s1">__anext__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):</span>
+        <span class="s1">line </span><span class="s2">= </span><span class="s0">await </span><span class="s1">self</span><span class="s2">.</span><span class="s1">readline</span><span class="s2">()</span>
+        <span class="s0">if </span><span class="s1">line</span><span class="s2">:</span>
+            <span class="s0">return </span><span class="s1">line</span>
+        <span class="s0">else</span><span class="s2">:</span>
+            <span class="s0">raise </span><span class="s1">StopAsyncIteration</span>
+
+    <span class="s0">async def </span><span class="s1">detach</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):</span>
+        <span class="s5">&quot;&quot;&quot;Like :meth:`io.BufferedIOBase.detach`, but async. 
+ 
+        This also re-wraps the result in a new :term:`asynchronous file object` 
+        wrapper. 
+ 
+        &quot;&quot;&quot;</span>
+
+        <span class="s1">raw </span><span class="s2">= </span><span class="s0">await </span><span class="s1">trio</span><span class="s2">.</span><span class="s1">to_thread</span><span class="s2">.</span><span class="s1">run_sync</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">_wrapped</span><span class="s2">.</span><span class="s1">detach</span><span class="s2">)</span>
+        <span class="s0">return </span><span class="s1">wrap_file</span><span class="s2">(</span><span class="s1">raw</span><span class="s2">)</span>
+
+    <span class="s0">async def </span><span class="s1">aclose</span><span class="s2">(</span><span class="s1">self</span><span class="s2">):</span>
+        <span class="s5">&quot;&quot;&quot;Like :meth:`io.IOBase.close`, but async. 
+ 
+        This is also shielded from cancellation; if a cancellation scope is 
+        cancelled, the wrapped file object will still be safely closed. 
+ 
+        &quot;&quot;&quot;</span>
+
+        <span class="s3"># ensure the underling file is closed during cancellation</span>
+        <span class="s0">with </span><span class="s1">trio</span><span class="s2">.</span><span class="s1">CancelScope</span><span class="s2">(</span><span class="s1">shield</span><span class="s2">=</span><span class="s0">True</span><span class="s2">):</span>
+            <span class="s0">await </span><span class="s1">trio</span><span class="s2">.</span><span class="s1">to_thread</span><span class="s2">.</span><span class="s1">run_sync</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">_wrapped</span><span class="s2">.</span><span class="s1">close</span><span class="s2">)</span>
+
+        <span class="s0">await </span><span class="s1">trio</span><span class="s2">.</span><span class="s1">lowlevel</span><span class="s2">.</span><span class="s1">checkpoint_if_cancelled</span><span class="s2">()</span>
+
+
+<span class="s0">async def </span><span class="s1">open_file</span><span class="s2">(</span>
+    <span class="s1">file</span><span class="s2">,</span>
+    <span class="s1">mode</span><span class="s2">=</span><span class="s4">&quot;r&quot;</span><span class="s2">,</span>
+    <span class="s1">buffering</span><span class="s2">=-</span><span class="s6">1</span><span class="s2">,</span>
+    <span class="s1">encoding</span><span class="s2">=</span><span class="s0">None</span><span class="s2">,</span>
+    <span class="s1">errors</span><span class="s2">=</span><span class="s0">None</span><span class="s2">,</span>
+    <span class="s1">newline</span><span class="s2">=</span><span class="s0">None</span><span class="s2">,</span>
+    <span class="s1">closefd</span><span class="s2">=</span><span class="s0">True</span><span class="s2">,</span>
+    <span class="s1">opener</span><span class="s2">=</span><span class="s0">None</span><span class="s2">,</span>
+<span class="s2">):</span>
+    <span class="s5">&quot;&quot;&quot;Asynchronous version of :func:`io.open`. 
+ 
+    Returns: 
+        An :term:`asynchronous file object` 
+ 
+    Example:: 
+ 
+        async with await trio.open_file(filename) as f: 
+            async for line in f: 
+                pass 
+ 
+        assert f.closed 
+ 
+    See also: 
+      :func:`trio.Path.open` 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">_file </span><span class="s2">= </span><span class="s1">wrap_file</span><span class="s2">(</span>
+        <span class="s0">await </span><span class="s1">trio</span><span class="s2">.</span><span class="s1">to_thread</span><span class="s2">.</span><span class="s1">run_sync</span><span class="s2">(</span>
+            <span class="s1">io</span><span class="s2">.</span><span class="s1">open</span><span class="s2">, </span><span class="s1">file</span><span class="s2">, </span><span class="s1">mode</span><span class="s2">, </span><span class="s1">buffering</span><span class="s2">, </span><span class="s1">encoding</span><span class="s2">, </span><span class="s1">errors</span><span class="s2">, </span><span class="s1">newline</span><span class="s2">, </span><span class="s1">closefd</span><span class="s2">, </span><span class="s1">opener</span>
+        <span class="s2">)</span>
+    <span class="s2">)</span>
+    <span class="s0">return </span><span class="s1">_file</span>
+
+
+<span class="s0">def </span><span class="s1">wrap_file</span><span class="s2">(</span><span class="s1">file</span><span class="s2">):</span>
+    <span class="s5">&quot;&quot;&quot;This wraps any file object in a wrapper that provides an asynchronous 
+    file object interface. 
+ 
+    Args: 
+        file: a :term:`file object` 
+ 
+    Returns: 
+        An :term:`asynchronous file object` that wraps ``file`` 
+ 
+    Example:: 
+ 
+        async_file = trio.wrap_file(StringIO('asdf')) 
+ 
+        assert await async_file.read() == 'asdf' 
+ 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">has</span><span class="s2">(</span><span class="s1">attr</span><span class="s2">):</span>
+        <span class="s0">return </span><span class="s1">hasattr</span><span class="s2">(</span><span class="s1">file</span><span class="s2">, </span><span class="s1">attr</span><span class="s2">) </span><span class="s0">and </span><span class="s1">callable</span><span class="s2">(</span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">file</span><span class="s2">, </span><span class="s1">attr</span><span class="s2">))</span>
+
+    <span class="s0">if not </span><span class="s2">(</span><span class="s1">has</span><span class="s2">(</span><span class="s4">&quot;close&quot;</span><span class="s2">) </span><span class="s0">and </span><span class="s2">(</span><span class="s1">has</span><span class="s2">(</span><span class="s4">&quot;read&quot;</span><span class="s2">) </span><span class="s0">or </span><span class="s1">has</span><span class="s2">(</span><span class="s4">&quot;write&quot;</span><span class="s2">))):</span>
+        <span class="s0">raise </span><span class="s1">TypeError</span><span class="s2">(</span>
+            <span class="s4">&quot;{} does not implement required duck-file methods: &quot;</span>
+            <span class="s4">&quot;close and (read or write)&quot;</span><span class="s2">.</span><span class="s1">format</span><span class="s2">(</span><span class="s1">file</span><span class="s2">)</span>
+        <span class="s2">)</span>
+
+    <span class="s0">return </span><span class="s1">AsyncIOWrapper</span><span class="s2">(</span><span class="s1">file</span><span class="s2">)</span>
+</pre>
+</body>
+</html>

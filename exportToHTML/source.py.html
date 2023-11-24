@@ -1,0 +1,240 @@
+<html>
+<head>
+<title>source.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #5f826b; font-style: italic;}
+.s4 { color: #6aab73;}
+.s5 { color: #7a7e85;}
+.s6 { color: #2aacb8;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+source.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">ast</span>
+<span class="s0">import </span><span class="s1">inspect</span>
+<span class="s0">import </span><span class="s1">textwrap</span>
+<span class="s0">import </span><span class="s1">tokenize</span>
+<span class="s0">import </span><span class="s1">types</span>
+<span class="s0">import </span><span class="s1">warnings</span>
+<span class="s0">from </span><span class="s1">bisect </span><span class="s0">import </span><span class="s1">bisect_right</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Iterable</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Iterator</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">List</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Optional</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">overload</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Tuple</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Union</span>
+
+
+<span class="s0">class </span><span class="s1">Source</span><span class="s2">:</span>
+    <span class="s3">&quot;&quot;&quot;An immutable object holding a source code fragment. 
+ 
+    When using Source(...), the source lines are deindented. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">obj</span><span class="s2">: </span><span class="s1">object </span><span class="s2">= </span><span class="s0">None</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s0">None</span><span class="s2">:</span>
+        <span class="s0">if not </span><span class="s1">obj</span><span class="s2">:</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">lines</span><span class="s2">: </span><span class="s1">List</span><span class="s2">[</span><span class="s1">str</span><span class="s2">] = []</span>
+        <span class="s0">elif </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">, </span><span class="s1">Source</span><span class="s2">):</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">lines </span><span class="s2">= </span><span class="s1">obj</span><span class="s2">.</span><span class="s1">lines</span>
+        <span class="s0">elif </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">, (</span><span class="s1">tuple</span><span class="s2">, </span><span class="s1">list</span><span class="s2">)):</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">lines </span><span class="s2">= </span><span class="s1">deindent</span><span class="s2">(</span><span class="s1">x</span><span class="s2">.</span><span class="s1">rstrip</span><span class="s2">(</span><span class="s4">&quot;</span><span class="s0">\n</span><span class="s4">&quot;</span><span class="s2">) </span><span class="s0">for </span><span class="s1">x </span><span class="s0">in </span><span class="s1">obj</span><span class="s2">)</span>
+        <span class="s0">elif </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">, </span><span class="s1">str</span><span class="s2">):</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">lines </span><span class="s2">= </span><span class="s1">deindent</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">.</span><span class="s1">split</span><span class="s2">(</span><span class="s4">&quot;</span><span class="s0">\n</span><span class="s4">&quot;</span><span class="s2">))</span>
+        <span class="s0">else</span><span class="s2">:</span>
+            <span class="s0">try</span><span class="s2">:</span>
+                <span class="s1">rawcode </span><span class="s2">= </span><span class="s1">getrawcode</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">)</span>
+                <span class="s1">src </span><span class="s2">= </span><span class="s1">inspect</span><span class="s2">.</span><span class="s1">getsource</span><span class="s2">(</span><span class="s1">rawcode</span><span class="s2">)</span>
+            <span class="s0">except </span><span class="s1">TypeError</span><span class="s2">:</span>
+                <span class="s1">src </span><span class="s2">= </span><span class="s1">inspect</span><span class="s2">.</span><span class="s1">getsource</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">)  </span><span class="s5"># type: ignore[arg-type]</span>
+            <span class="s1">self</span><span class="s2">.</span><span class="s1">lines </span><span class="s2">= </span><span class="s1">deindent</span><span class="s2">(</span><span class="s1">src</span><span class="s2">.</span><span class="s1">split</span><span class="s2">(</span><span class="s4">&quot;</span><span class="s0">\n</span><span class="s4">&quot;</span><span class="s2">))</span>
+
+    <span class="s0">def </span><span class="s1">__eq__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">other</span><span class="s2">: </span><span class="s1">object</span><span class="s2">) </span><span class="s1">-&gt; bool</span><span class="s2">:</span>
+        <span class="s0">if not </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">other</span><span class="s2">, </span><span class="s1">Source</span><span class="s2">):</span>
+            <span class="s0">return </span><span class="s1">NotImplemented</span>
+        <span class="s0">return </span><span class="s1">self</span><span class="s2">.</span><span class="s1">lines </span><span class="s2">== </span><span class="s1">other</span><span class="s2">.</span><span class="s1">lines</span>
+
+    <span class="s5"># Ignore type because of https://github.com/python/mypy/issues/4266.</span>
+    <span class="s1">__hash__ </span><span class="s2">= </span><span class="s0">None  </span><span class="s5"># type: ignore</span>
+
+    <span class="s2">@</span><span class="s1">overload</span>
+    <span class="s0">def </span><span class="s1">__getitem__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">key</span><span class="s2">: </span><span class="s1">int</span><span class="s2">) </span><span class="s1">-&gt; str</span><span class="s2">:</span>
+        <span class="s2">...</span>
+
+    <span class="s2">@</span><span class="s1">overload</span>
+    <span class="s0">def </span><span class="s1">__getitem__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">key</span><span class="s2">: </span><span class="s1">slice</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s4">&quot;Source&quot;</span><span class="s2">:</span>
+        <span class="s2">...</span>
+
+    <span class="s0">def </span><span class="s1">__getitem__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">key</span><span class="s2">: </span><span class="s1">Union</span><span class="s2">[</span><span class="s1">int</span><span class="s2">, </span><span class="s1">slice</span><span class="s2">]) </span><span class="s1">-&gt; Union</span><span class="s2">[</span><span class="s1">str</span><span class="s2">, </span><span class="s4">&quot;Source&quot;</span><span class="s2">]:</span>
+        <span class="s0">if </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">key</span><span class="s2">, </span><span class="s1">int</span><span class="s2">):</span>
+            <span class="s0">return </span><span class="s1">self</span><span class="s2">.</span><span class="s1">lines</span><span class="s2">[</span><span class="s1">key</span><span class="s2">]</span>
+        <span class="s0">else</span><span class="s2">:</span>
+            <span class="s0">if </span><span class="s1">key</span><span class="s2">.</span><span class="s1">step </span><span class="s0">not in </span><span class="s2">(</span><span class="s0">None</span><span class="s2">, </span><span class="s6">1</span><span class="s2">):</span>
+                <span class="s0">raise </span><span class="s1">IndexError</span><span class="s2">(</span><span class="s4">&quot;cannot slice a Source with a step&quot;</span><span class="s2">)</span>
+            <span class="s1">newsource </span><span class="s2">= </span><span class="s1">Source</span><span class="s2">()</span>
+            <span class="s1">newsource</span><span class="s2">.</span><span class="s1">lines </span><span class="s2">= </span><span class="s1">self</span><span class="s2">.</span><span class="s1">lines</span><span class="s2">[</span><span class="s1">key</span><span class="s2">.</span><span class="s1">start </span><span class="s2">: </span><span class="s1">key</span><span class="s2">.</span><span class="s1">stop</span><span class="s2">]</span>
+            <span class="s0">return </span><span class="s1">newsource</span>
+
+    <span class="s0">def </span><span class="s1">__iter__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">) </span><span class="s1">-&gt; Iterator</span><span class="s2">[</span><span class="s1">str</span><span class="s2">]:</span>
+        <span class="s0">return </span><span class="s1">iter</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">lines</span><span class="s2">)</span>
+
+    <span class="s0">def </span><span class="s1">__len__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">) </span><span class="s1">-&gt; int</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">len</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">lines</span><span class="s2">)</span>
+
+    <span class="s0">def </span><span class="s1">strip</span><span class="s2">(</span><span class="s1">self</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s4">&quot;Source&quot;</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Return new Source object with trailing and leading blank lines removed.&quot;&quot;&quot;</span>
+        <span class="s1">start</span><span class="s2">, </span><span class="s1">end </span><span class="s2">= </span><span class="s6">0</span><span class="s2">, </span><span class="s1">len</span><span class="s2">(</span><span class="s1">self</span><span class="s2">)</span>
+        <span class="s0">while </span><span class="s1">start </span><span class="s2">&lt; </span><span class="s1">end </span><span class="s0">and not </span><span class="s1">self</span><span class="s2">.</span><span class="s1">lines</span><span class="s2">[</span><span class="s1">start</span><span class="s2">].</span><span class="s1">strip</span><span class="s2">():</span>
+            <span class="s1">start </span><span class="s2">+= </span><span class="s6">1</span>
+        <span class="s0">while </span><span class="s1">end </span><span class="s2">&gt; </span><span class="s1">start </span><span class="s0">and not </span><span class="s1">self</span><span class="s2">.</span><span class="s1">lines</span><span class="s2">[</span><span class="s1">end </span><span class="s2">- </span><span class="s6">1</span><span class="s2">].</span><span class="s1">strip</span><span class="s2">():</span>
+            <span class="s1">end </span><span class="s2">-= </span><span class="s6">1</span>
+        <span class="s1">source </span><span class="s2">= </span><span class="s1">Source</span><span class="s2">()</span>
+        <span class="s1">source</span><span class="s2">.</span><span class="s1">lines</span><span class="s2">[:] = </span><span class="s1">self</span><span class="s2">.</span><span class="s1">lines</span><span class="s2">[</span><span class="s1">start</span><span class="s2">:</span><span class="s1">end</span><span class="s2">]</span>
+        <span class="s0">return </span><span class="s1">source</span>
+
+    <span class="s0">def </span><span class="s1">indent</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">indent</span><span class="s2">: </span><span class="s1">str </span><span class="s2">= </span><span class="s4">&quot; &quot; </span><span class="s2">* </span><span class="s6">4</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s4">&quot;Source&quot;</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Return a copy of the source object with all lines indented by the 
+        given indent-string.&quot;&quot;&quot;</span>
+        <span class="s1">newsource </span><span class="s2">= </span><span class="s1">Source</span><span class="s2">()</span>
+        <span class="s1">newsource</span><span class="s2">.</span><span class="s1">lines </span><span class="s2">= [(</span><span class="s1">indent </span><span class="s2">+ </span><span class="s1">line</span><span class="s2">) </span><span class="s0">for </span><span class="s1">line </span><span class="s0">in </span><span class="s1">self</span><span class="s2">.</span><span class="s1">lines</span><span class="s2">]</span>
+        <span class="s0">return </span><span class="s1">newsource</span>
+
+    <span class="s0">def </span><span class="s1">getstatement</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">lineno</span><span class="s2">: </span><span class="s1">int</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s4">&quot;Source&quot;</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Return Source statement which contains the given linenumber 
+        (counted from 0).&quot;&quot;&quot;</span>
+        <span class="s1">start</span><span class="s2">, </span><span class="s1">end </span><span class="s2">= </span><span class="s1">self</span><span class="s2">.</span><span class="s1">getstatementrange</span><span class="s2">(</span><span class="s1">lineno</span><span class="s2">)</span>
+        <span class="s0">return </span><span class="s1">self</span><span class="s2">[</span><span class="s1">start</span><span class="s2">:</span><span class="s1">end</span><span class="s2">]</span>
+
+    <span class="s0">def </span><span class="s1">getstatementrange</span><span class="s2">(</span><span class="s1">self</span><span class="s2">, </span><span class="s1">lineno</span><span class="s2">: </span><span class="s1">int</span><span class="s2">) </span><span class="s1">-&gt; Tuple</span><span class="s2">[</span><span class="s1">int</span><span class="s2">, </span><span class="s1">int</span><span class="s2">]:</span>
+        <span class="s3">&quot;&quot;&quot;Return (start, end) tuple which spans the minimal statement region 
+        which containing the given lineno.&quot;&quot;&quot;</span>
+        <span class="s0">if not </span><span class="s2">(</span><span class="s6">0 </span><span class="s2">&lt;= </span><span class="s1">lineno </span><span class="s2">&lt; </span><span class="s1">len</span><span class="s2">(</span><span class="s1">self</span><span class="s2">)):</span>
+            <span class="s0">raise </span><span class="s1">IndexError</span><span class="s2">(</span><span class="s4">&quot;lineno out of range&quot;</span><span class="s2">)</span>
+        <span class="s1">ast</span><span class="s2">, </span><span class="s1">start</span><span class="s2">, </span><span class="s1">end </span><span class="s2">= </span><span class="s1">getstatementrange_ast</span><span class="s2">(</span><span class="s1">lineno</span><span class="s2">, </span><span class="s1">self</span><span class="s2">)</span>
+        <span class="s0">return </span><span class="s1">start</span><span class="s2">, </span><span class="s1">end</span>
+
+    <span class="s0">def </span><span class="s1">deindent</span><span class="s2">(</span><span class="s1">self</span><span class="s2">) </span><span class="s1">-&gt; </span><span class="s4">&quot;Source&quot;</span><span class="s2">:</span>
+        <span class="s3">&quot;&quot;&quot;Return a new Source object deindented.&quot;&quot;&quot;</span>
+        <span class="s1">newsource </span><span class="s2">= </span><span class="s1">Source</span><span class="s2">()</span>
+        <span class="s1">newsource</span><span class="s2">.</span><span class="s1">lines</span><span class="s2">[:] = </span><span class="s1">deindent</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">lines</span><span class="s2">)</span>
+        <span class="s0">return </span><span class="s1">newsource</span>
+
+    <span class="s0">def </span><span class="s1">__str__</span><span class="s2">(</span><span class="s1">self</span><span class="s2">) </span><span class="s1">-&gt; str</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s4">&quot;</span><span class="s0">\n</span><span class="s4">&quot;</span><span class="s2">.</span><span class="s1">join</span><span class="s2">(</span><span class="s1">self</span><span class="s2">.</span><span class="s1">lines</span><span class="s2">)</span>
+
+
+<span class="s5">#</span>
+<span class="s5"># helper functions</span>
+<span class="s5">#</span>
+
+
+<span class="s0">def </span><span class="s1">findsource</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">) </span><span class="s1">-&gt; Tuple</span><span class="s2">[</span><span class="s1">Optional</span><span class="s2">[</span><span class="s1">Source</span><span class="s2">], </span><span class="s1">int</span><span class="s2">]:</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s1">sourcelines</span><span class="s2">, </span><span class="s1">lineno </span><span class="s2">= </span><span class="s1">inspect</span><span class="s2">.</span><span class="s1">findsource</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">)</span>
+    <span class="s0">except </span><span class="s1">Exception</span><span class="s2">:</span>
+        <span class="s0">return None</span><span class="s2">, -</span><span class="s6">1</span>
+    <span class="s1">source </span><span class="s2">= </span><span class="s1">Source</span><span class="s2">()</span>
+    <span class="s1">source</span><span class="s2">.</span><span class="s1">lines </span><span class="s2">= [</span><span class="s1">line</span><span class="s2">.</span><span class="s1">rstrip</span><span class="s2">() </span><span class="s0">for </span><span class="s1">line </span><span class="s0">in </span><span class="s1">sourcelines</span><span class="s2">]</span>
+    <span class="s0">return </span><span class="s1">source</span><span class="s2">, </span><span class="s1">lineno</span>
+
+
+<span class="s0">def </span><span class="s1">getrawcode</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">: </span><span class="s1">object</span><span class="s2">, </span><span class="s1">trycall</span><span class="s2">: </span><span class="s1">bool </span><span class="s2">= </span><span class="s0">True</span><span class="s2">) </span><span class="s1">-&gt; types</span><span class="s2">.</span><span class="s1">CodeType</span><span class="s2">:</span>
+    <span class="s3">&quot;&quot;&quot;Return code object for given function.&quot;&quot;&quot;</span>
+    <span class="s0">try</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s1">obj</span><span class="s2">.</span><span class="s1">__code__  </span><span class="s5"># type: ignore[attr-defined,no-any-return]</span>
+    <span class="s0">except </span><span class="s1">AttributeError</span><span class="s2">:</span>
+        <span class="s0">pass</span>
+    <span class="s0">if </span><span class="s1">trycall</span><span class="s2">:</span>
+        <span class="s1">call </span><span class="s2">= </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">, </span><span class="s4">&quot;__call__&quot;</span><span class="s2">, </span><span class="s0">None</span><span class="s2">)</span>
+        <span class="s0">if </span><span class="s1">call </span><span class="s0">and not </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">obj</span><span class="s2">, </span><span class="s1">type</span><span class="s2">):</span>
+            <span class="s0">return </span><span class="s1">getrawcode</span><span class="s2">(</span><span class="s1">call</span><span class="s2">, </span><span class="s1">trycall</span><span class="s2">=</span><span class="s0">False</span><span class="s2">)</span>
+    <span class="s0">raise </span><span class="s1">TypeError</span><span class="s2">(</span><span class="s4">f&quot;could not get code object for </span><span class="s0">{</span><span class="s1">obj</span><span class="s0">!r}</span><span class="s4">&quot;</span><span class="s2">)</span>
+
+
+<span class="s0">def </span><span class="s1">deindent</span><span class="s2">(</span><span class="s1">lines</span><span class="s2">: </span><span class="s1">Iterable</span><span class="s2">[</span><span class="s1">str</span><span class="s2">]) </span><span class="s1">-&gt; List</span><span class="s2">[</span><span class="s1">str</span><span class="s2">]:</span>
+    <span class="s0">return </span><span class="s1">textwrap</span><span class="s2">.</span><span class="s1">dedent</span><span class="s2">(</span><span class="s4">&quot;</span><span class="s0">\n</span><span class="s4">&quot;</span><span class="s2">.</span><span class="s1">join</span><span class="s2">(</span><span class="s1">lines</span><span class="s2">)).</span><span class="s1">splitlines</span><span class="s2">()</span>
+
+
+<span class="s0">def </span><span class="s1">get_statement_startend2</span><span class="s2">(</span><span class="s1">lineno</span><span class="s2">: </span><span class="s1">int</span><span class="s2">, </span><span class="s1">node</span><span class="s2">: </span><span class="s1">ast</span><span class="s2">.</span><span class="s1">AST</span><span class="s2">) </span><span class="s1">-&gt; Tuple</span><span class="s2">[</span><span class="s1">int</span><span class="s2">, </span><span class="s1">Optional</span><span class="s2">[</span><span class="s1">int</span><span class="s2">]]:</span>
+    <span class="s5"># Flatten all statements and except handlers into one lineno-list.</span>
+    <span class="s5"># AST's line numbers start indexing at 1.</span>
+    <span class="s1">values</span><span class="s2">: </span><span class="s1">List</span><span class="s2">[</span><span class="s1">int</span><span class="s2">] = []</span>
+    <span class="s0">for </span><span class="s1">x </span><span class="s0">in </span><span class="s1">ast</span><span class="s2">.</span><span class="s1">walk</span><span class="s2">(</span><span class="s1">node</span><span class="s2">):</span>
+        <span class="s0">if </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">x</span><span class="s2">, (</span><span class="s1">ast</span><span class="s2">.</span><span class="s1">stmt</span><span class="s2">, </span><span class="s1">ast</span><span class="s2">.</span><span class="s1">ExceptHandler</span><span class="s2">)):</span>
+            <span class="s5"># Before Python 3.8, the lineno of a decorated class or function pointed at the decorator.</span>
+            <span class="s5"># Since Python 3.8, the lineno points to the class/def, so need to include the decorators.</span>
+            <span class="s0">if </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">x</span><span class="s2">, (</span><span class="s1">ast</span><span class="s2">.</span><span class="s1">ClassDef</span><span class="s2">, </span><span class="s1">ast</span><span class="s2">.</span><span class="s1">FunctionDef</span><span class="s2">, </span><span class="s1">ast</span><span class="s2">.</span><span class="s1">AsyncFunctionDef</span><span class="s2">)):</span>
+                <span class="s0">for </span><span class="s1">d </span><span class="s0">in </span><span class="s1">x</span><span class="s2">.</span><span class="s1">decorator_list</span><span class="s2">:</span>
+                    <span class="s1">values</span><span class="s2">.</span><span class="s1">append</span><span class="s2">(</span><span class="s1">d</span><span class="s2">.</span><span class="s1">lineno </span><span class="s2">- </span><span class="s6">1</span><span class="s2">)</span>
+            <span class="s1">values</span><span class="s2">.</span><span class="s1">append</span><span class="s2">(</span><span class="s1">x</span><span class="s2">.</span><span class="s1">lineno </span><span class="s2">- </span><span class="s6">1</span><span class="s2">)</span>
+            <span class="s0">for </span><span class="s1">name </span><span class="s0">in </span><span class="s2">(</span><span class="s4">&quot;finalbody&quot;</span><span class="s2">, </span><span class="s4">&quot;orelse&quot;</span><span class="s2">):</span>
+                <span class="s1">val</span><span class="s2">: </span><span class="s1">Optional</span><span class="s2">[</span><span class="s1">List</span><span class="s2">[</span><span class="s1">ast</span><span class="s2">.</span><span class="s1">stmt</span><span class="s2">]] = </span><span class="s1">getattr</span><span class="s2">(</span><span class="s1">x</span><span class="s2">, </span><span class="s1">name</span><span class="s2">, </span><span class="s0">None</span><span class="s2">)</span>
+                <span class="s0">if </span><span class="s1">val</span><span class="s2">:</span>
+                    <span class="s5"># Treat the finally/orelse part as its own statement.</span>
+                    <span class="s1">values</span><span class="s2">.</span><span class="s1">append</span><span class="s2">(</span><span class="s1">val</span><span class="s2">[</span><span class="s6">0</span><span class="s2">].</span><span class="s1">lineno </span><span class="s2">- </span><span class="s6">1 </span><span class="s2">- </span><span class="s6">1</span><span class="s2">)</span>
+    <span class="s1">values</span><span class="s2">.</span><span class="s1">sort</span><span class="s2">()</span>
+    <span class="s1">insert_index </span><span class="s2">= </span><span class="s1">bisect_right</span><span class="s2">(</span><span class="s1">values</span><span class="s2">, </span><span class="s1">lineno</span><span class="s2">)</span>
+    <span class="s1">start </span><span class="s2">= </span><span class="s1">values</span><span class="s2">[</span><span class="s1">insert_index </span><span class="s2">- </span><span class="s6">1</span><span class="s2">]</span>
+    <span class="s0">if </span><span class="s1">insert_index </span><span class="s2">&gt;= </span><span class="s1">len</span><span class="s2">(</span><span class="s1">values</span><span class="s2">):</span>
+        <span class="s1">end </span><span class="s2">= </span><span class="s0">None</span>
+    <span class="s0">else</span><span class="s2">:</span>
+        <span class="s1">end </span><span class="s2">= </span><span class="s1">values</span><span class="s2">[</span><span class="s1">insert_index</span><span class="s2">]</span>
+    <span class="s0">return </span><span class="s1">start</span><span class="s2">, </span><span class="s1">end</span>
+
+
+<span class="s0">def </span><span class="s1">getstatementrange_ast</span><span class="s2">(</span>
+    <span class="s1">lineno</span><span class="s2">: </span><span class="s1">int</span><span class="s2">,</span>
+    <span class="s1">source</span><span class="s2">: </span><span class="s1">Source</span><span class="s2">,</span>
+    <span class="s1">assertion</span><span class="s2">: </span><span class="s1">bool </span><span class="s2">= </span><span class="s0">False</span><span class="s2">,</span>
+    <span class="s1">astnode</span><span class="s2">: </span><span class="s1">Optional</span><span class="s2">[</span><span class="s1">ast</span><span class="s2">.</span><span class="s1">AST</span><span class="s2">] = </span><span class="s0">None</span><span class="s2">,</span>
+<span class="s2">) </span><span class="s1">-&gt; Tuple</span><span class="s2">[</span><span class="s1">ast</span><span class="s2">.</span><span class="s1">AST</span><span class="s2">, </span><span class="s1">int</span><span class="s2">, </span><span class="s1">int</span><span class="s2">]:</span>
+    <span class="s0">if </span><span class="s1">astnode </span><span class="s0">is None</span><span class="s2">:</span>
+        <span class="s1">content </span><span class="s2">= </span><span class="s1">str</span><span class="s2">(</span><span class="s1">source</span><span class="s2">)</span>
+        <span class="s5"># See #4260:</span>
+        <span class="s5"># Don't produce duplicate warnings when compiling source to find AST.</span>
+        <span class="s0">with </span><span class="s1">warnings</span><span class="s2">.</span><span class="s1">catch_warnings</span><span class="s2">():</span>
+            <span class="s1">warnings</span><span class="s2">.</span><span class="s1">simplefilter</span><span class="s2">(</span><span class="s4">&quot;ignore&quot;</span><span class="s2">)</span>
+            <span class="s1">astnode </span><span class="s2">= </span><span class="s1">ast</span><span class="s2">.</span><span class="s1">parse</span><span class="s2">(</span><span class="s1">content</span><span class="s2">, </span><span class="s4">&quot;source&quot;</span><span class="s2">, </span><span class="s4">&quot;exec&quot;</span><span class="s2">)</span>
+
+    <span class="s1">start</span><span class="s2">, </span><span class="s1">end </span><span class="s2">= </span><span class="s1">get_statement_startend2</span><span class="s2">(</span><span class="s1">lineno</span><span class="s2">, </span><span class="s1">astnode</span><span class="s2">)</span>
+    <span class="s5"># We need to correct the end:</span>
+    <span class="s5"># - ast-parsing strips comments</span>
+    <span class="s5"># - there might be empty lines</span>
+    <span class="s5"># - we might have lesser indented code blocks at the end</span>
+    <span class="s0">if </span><span class="s1">end </span><span class="s0">is None</span><span class="s2">:</span>
+        <span class="s1">end </span><span class="s2">= </span><span class="s1">len</span><span class="s2">(</span><span class="s1">source</span><span class="s2">.</span><span class="s1">lines</span><span class="s2">)</span>
+
+    <span class="s0">if </span><span class="s1">end </span><span class="s2">&gt; </span><span class="s1">start </span><span class="s2">+ </span><span class="s6">1</span><span class="s2">:</span>
+        <span class="s5"># Make sure we don't span differently indented code blocks</span>
+        <span class="s5"># by using the BlockFinder helper used which inspect.getsource() uses itself.</span>
+        <span class="s1">block_finder </span><span class="s2">= </span><span class="s1">inspect</span><span class="s2">.</span><span class="s1">BlockFinder</span><span class="s2">()</span>
+        <span class="s5"># If we start with an indented line, put blockfinder to &quot;started&quot; mode.</span>
+        <span class="s1">block_finder</span><span class="s2">.</span><span class="s1">started </span><span class="s2">= </span><span class="s1">source</span><span class="s2">.</span><span class="s1">lines</span><span class="s2">[</span><span class="s1">start</span><span class="s2">][</span><span class="s6">0</span><span class="s2">].</span><span class="s1">isspace</span><span class="s2">()</span>
+        <span class="s1">it </span><span class="s2">= ((</span><span class="s1">x </span><span class="s2">+ </span><span class="s4">&quot;</span><span class="s0">\n</span><span class="s4">&quot;</span><span class="s2">) </span><span class="s0">for </span><span class="s1">x </span><span class="s0">in </span><span class="s1">source</span><span class="s2">.</span><span class="s1">lines</span><span class="s2">[</span><span class="s1">start</span><span class="s2">:</span><span class="s1">end</span><span class="s2">])</span>
+        <span class="s0">try</span><span class="s2">:</span>
+            <span class="s0">for </span><span class="s1">tok </span><span class="s0">in </span><span class="s1">tokenize</span><span class="s2">.</span><span class="s1">generate_tokens</span><span class="s2">(</span><span class="s0">lambda</span><span class="s2">: </span><span class="s1">next</span><span class="s2">(</span><span class="s1">it</span><span class="s2">)):</span>
+                <span class="s1">block_finder</span><span class="s2">.</span><span class="s1">tokeneater</span><span class="s2">(*</span><span class="s1">tok</span><span class="s2">)</span>
+        <span class="s0">except </span><span class="s2">(</span><span class="s1">inspect</span><span class="s2">.</span><span class="s1">EndOfBlock</span><span class="s2">, </span><span class="s1">IndentationError</span><span class="s2">):</span>
+            <span class="s1">end </span><span class="s2">= </span><span class="s1">block_finder</span><span class="s2">.</span><span class="s1">last </span><span class="s2">+ </span><span class="s1">start</span>
+        <span class="s0">except </span><span class="s1">Exception</span><span class="s2">:</span>
+            <span class="s0">pass</span>
+
+    <span class="s5"># The end might still point to a comment or empty line, correct it.</span>
+    <span class="s0">while </span><span class="s1">end</span><span class="s2">:</span>
+        <span class="s1">line </span><span class="s2">= </span><span class="s1">source</span><span class="s2">.</span><span class="s1">lines</span><span class="s2">[</span><span class="s1">end </span><span class="s2">- </span><span class="s6">1</span><span class="s2">].</span><span class="s1">lstrip</span><span class="s2">()</span>
+        <span class="s0">if </span><span class="s1">line</span><span class="s2">.</span><span class="s1">startswith</span><span class="s2">(</span><span class="s4">&quot;#&quot;</span><span class="s2">) </span><span class="s0">or not </span><span class="s1">line</span><span class="s2">:</span>
+            <span class="s1">end </span><span class="s2">-= </span><span class="s6">1</span>
+        <span class="s0">else</span><span class="s2">:</span>
+            <span class="s0">break</span>
+    <span class="s0">return </span><span class="s1">astnode</span><span class="s2">, </span><span class="s1">start</span><span class="s2">, </span><span class="s1">end</span>
+</pre>
+</body>
+</html>

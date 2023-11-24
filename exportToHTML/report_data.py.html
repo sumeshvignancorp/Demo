@@ -1,0 +1,176 @@
+<html>
+<head>
+<title>report_data.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #7a7e85;}
+.s1 { color: #bcbec4;}
+.s2 { color: #cf8e6d;}
+.s3 { color: #bcbec4;}
+.s4 { color: #6aab73;}
+.s5 { color: #2aacb8;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+report_data.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># This Source Code Form is subject to the terms of the Mozilla Public</span>
+<span class="s0"># License, v. 2.0. If a copy of the MPL was not distributed with this</span>
+<span class="s0"># file, You can obtain one at http://mozilla.org/MPL/2.0/.</span>
+<span class="s2">import </span><span class="s1">warnings</span>
+<span class="s2">from </span><span class="s1">collections </span><span class="s2">import </span><span class="s1">defaultdict</span>
+
+<span class="s2">from </span><span class="s1">pytest_html</span><span class="s3">.</span><span class="s1">util </span><span class="s2">import </span><span class="s1">_handle_ansi</span>
+
+
+<span class="s2">class </span><span class="s1">ReportData</span><span class="s3">:</span>
+    <span class="s2">def </span><span class="s1">__init__</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">config</span><span class="s3">):</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_config </span><span class="s3">= </span><span class="s1">config</span>
+
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_additional_summary </span><span class="s3">= {</span>
+            <span class="s4">&quot;prefix&quot;</span><span class="s3">: [],</span>
+            <span class="s4">&quot;summary&quot;</span><span class="s3">: [],</span>
+            <span class="s4">&quot;postfix&quot;</span><span class="s3">: [],</span>
+        <span class="s3">}</span>
+
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_collected_items </span><span class="s3">= </span><span class="s5">0</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_total_duration </span><span class="s3">= </span><span class="s5">0</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_running_state </span><span class="s3">= </span><span class="s4">&quot;not_started&quot;</span>
+
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_outcomes </span><span class="s3">= {</span>
+            <span class="s4">&quot;failed&quot;</span><span class="s3">: {</span><span class="s4">&quot;label&quot;</span><span class="s3">: </span><span class="s4">&quot;Failed&quot;</span><span class="s3">, </span><span class="s4">&quot;value&quot;</span><span class="s3">: </span><span class="s5">0</span><span class="s3">},</span>
+            <span class="s4">&quot;passed&quot;</span><span class="s3">: {</span><span class="s4">&quot;label&quot;</span><span class="s3">: </span><span class="s4">&quot;Passed&quot;</span><span class="s3">, </span><span class="s4">&quot;value&quot;</span><span class="s3">: </span><span class="s5">0</span><span class="s3">},</span>
+            <span class="s4">&quot;skipped&quot;</span><span class="s3">: {</span><span class="s4">&quot;label&quot;</span><span class="s3">: </span><span class="s4">&quot;Skipped&quot;</span><span class="s3">, </span><span class="s4">&quot;value&quot;</span><span class="s3">: </span><span class="s5">0</span><span class="s3">},</span>
+            <span class="s4">&quot;xfailed&quot;</span><span class="s3">: {</span><span class="s4">&quot;label&quot;</span><span class="s3">: </span><span class="s4">&quot;Expected failures&quot;</span><span class="s3">, </span><span class="s4">&quot;value&quot;</span><span class="s3">: </span><span class="s5">0</span><span class="s3">},</span>
+            <span class="s4">&quot;xpassed&quot;</span><span class="s3">: {</span><span class="s4">&quot;label&quot;</span><span class="s3">: </span><span class="s4">&quot;Unexpected passes&quot;</span><span class="s3">, </span><span class="s4">&quot;value&quot;</span><span class="s3">: </span><span class="s5">0</span><span class="s3">},</span>
+            <span class="s4">&quot;error&quot;</span><span class="s3">: {</span><span class="s4">&quot;label&quot;</span><span class="s3">: </span><span class="s4">&quot;Errors&quot;</span><span class="s3">, </span><span class="s4">&quot;value&quot;</span><span class="s3">: </span><span class="s5">0</span><span class="s3">},</span>
+            <span class="s4">&quot;rerun&quot;</span><span class="s3">: {</span><span class="s4">&quot;label&quot;</span><span class="s3">: </span><span class="s4">&quot;Reruns&quot;</span><span class="s3">, </span><span class="s4">&quot;value&quot;</span><span class="s3">: </span><span class="s5">0</span><span class="s3">},</span>
+        <span class="s3">}</span>
+
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_results_table_header </span><span class="s3">= [</span>
+            <span class="s4">'&lt;th class=&quot;sortable&quot; data-column-type=&quot;result&quot;&gt;Result&lt;/th&gt;'</span><span class="s3">,</span>
+            <span class="s4">'&lt;th class=&quot;sortable&quot; data-column-type=&quot;testId&quot;&gt;Test&lt;/th&gt;'</span><span class="s3">,</span>
+            <span class="s4">'&lt;th class=&quot;sortable&quot; data-column-type=&quot;duration&quot;&gt;Duration&lt;/th&gt;'</span><span class="s3">,</span>
+            <span class="s4">&quot;&lt;th&gt;Links&lt;/th&gt;&quot;</span><span class="s3">,</span>
+        <span class="s3">]</span>
+
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_data </span><span class="s3">= {</span>
+            <span class="s4">&quot;environment&quot;</span><span class="s3">: {},</span>
+            <span class="s4">&quot;tests&quot;</span><span class="s3">: </span><span class="s1">defaultdict</span><span class="s3">(</span><span class="s1">list</span><span class="s3">),</span>
+        <span class="s3">}</span>
+
+        <span class="s1">collapsed </span><span class="s3">= </span><span class="s1">config</span><span class="s3">.</span><span class="s1">getini</span><span class="s3">(</span><span class="s4">&quot;render_collapsed&quot;</span><span class="s3">)</span>
+        <span class="s2">if </span><span class="s1">collapsed</span><span class="s3">.</span><span class="s1">lower</span><span class="s3">() == </span><span class="s4">&quot;true&quot;</span><span class="s3">:</span>
+            <span class="s1">warnings</span><span class="s3">.</span><span class="s1">warn</span><span class="s3">(</span>
+                <span class="s4">&quot;'render_collapsed = True' is deprecated and support &quot;</span>
+                <span class="s4">&quot;will be removed in the next major release. &quot;</span>
+                <span class="s4">&quot;Please use 'render_collapsed = all' instead.&quot;</span><span class="s3">,</span>
+                <span class="s1">DeprecationWarning</span><span class="s3">,</span>
+            <span class="s3">)</span>
+            <span class="s1">collapsed </span><span class="s3">= </span><span class="s4">&quot;all&quot;</span>
+
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_data</span><span class="s3">[</span><span class="s4">&quot;renderCollapsed&quot;</span><span class="s3">] = [</span>
+            <span class="s1">outcome</span><span class="s3">.</span><span class="s1">lower</span><span class="s3">() </span><span class="s2">for </span><span class="s1">outcome </span><span class="s2">in </span><span class="s1">collapsed</span><span class="s3">.</span><span class="s1">split</span><span class="s3">(</span><span class="s4">&quot;,&quot;</span><span class="s3">)</span>
+        <span class="s3">]</span>
+
+        <span class="s1">initial_sort </span><span class="s3">= </span><span class="s1">config</span><span class="s3">.</span><span class="s1">getini</span><span class="s3">(</span><span class="s4">&quot;initial_sort&quot;</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_data</span><span class="s3">[</span><span class="s4">&quot;initialSort&quot;</span><span class="s3">] = </span><span class="s1">initial_sort</span>
+
+    <span class="s3">@</span><span class="s1">property</span>
+    <span class="s2">def </span><span class="s1">additional_summary</span><span class="s3">(</span><span class="s1">self</span><span class="s3">):</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_additional_summary</span>
+
+    <span class="s3">@</span><span class="s1">additional_summary</span><span class="s3">.</span><span class="s1">setter</span>
+    <span class="s2">def </span><span class="s1">additional_summary</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">value</span><span class="s3">):</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_additional_summary </span><span class="s3">= </span><span class="s1">value</span>
+
+    <span class="s3">@</span><span class="s1">property</span>
+    <span class="s2">def </span><span class="s1">collected_items</span><span class="s3">(</span><span class="s1">self</span><span class="s3">):</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_collected_items</span>
+
+    <span class="s3">@</span><span class="s1">collected_items</span><span class="s3">.</span><span class="s1">setter</span>
+    <span class="s2">def </span><span class="s1">collected_items</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">count</span><span class="s3">):</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_collected_items </span><span class="s3">= </span><span class="s1">count</span>
+
+    <span class="s3">@</span><span class="s1">property</span>
+    <span class="s2">def </span><span class="s1">config</span><span class="s3">(</span><span class="s1">self</span><span class="s3">):</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_config</span>
+
+    <span class="s3">@</span><span class="s1">property</span>
+    <span class="s2">def </span><span class="s1">data</span><span class="s3">(</span><span class="s1">self</span><span class="s3">):</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_data</span>
+
+    <span class="s3">@</span><span class="s1">property</span>
+    <span class="s2">def </span><span class="s1">outcomes</span><span class="s3">(</span><span class="s1">self</span><span class="s3">):</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_outcomes</span>
+
+    <span class="s3">@</span><span class="s1">outcomes</span><span class="s3">.</span><span class="s1">setter</span>
+    <span class="s2">def </span><span class="s1">outcomes</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">outcome</span><span class="s3">):</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_outcomes</span><span class="s3">[</span><span class="s1">outcome</span><span class="s3">.</span><span class="s1">lower</span><span class="s3">()][</span><span class="s4">&quot;value&quot;</span><span class="s3">] += </span><span class="s5">1</span>
+
+    <span class="s3">@</span><span class="s1">property</span>
+    <span class="s2">def </span><span class="s1">running_state</span><span class="s3">(</span><span class="s1">self</span><span class="s3">):</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_running_state</span>
+
+    <span class="s3">@</span><span class="s1">running_state</span><span class="s3">.</span><span class="s1">setter</span>
+    <span class="s2">def </span><span class="s1">running_state</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">state</span><span class="s3">):</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_running_state </span><span class="s3">= </span><span class="s1">state</span>
+
+    <span class="s3">@</span><span class="s1">property</span>
+    <span class="s2">def </span><span class="s1">table_header</span><span class="s3">(</span><span class="s1">self</span><span class="s3">):</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_results_table_header</span>
+
+    <span class="s3">@</span><span class="s1">table_header</span><span class="s3">.</span><span class="s1">setter</span>
+    <span class="s2">def </span><span class="s1">table_header</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">header</span><span class="s3">):</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_results_table_header </span><span class="s3">= </span><span class="s1">header</span>
+
+    <span class="s3">@</span><span class="s1">property</span>
+    <span class="s2">def </span><span class="s1">title</span><span class="s3">(</span><span class="s1">self</span><span class="s3">):</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_data</span><span class="s3">[</span><span class="s4">&quot;title&quot;</span><span class="s3">]</span>
+
+    <span class="s3">@</span><span class="s1">title</span><span class="s3">.</span><span class="s1">setter</span>
+    <span class="s2">def </span><span class="s1">title</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">title</span><span class="s3">):</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_data</span><span class="s3">[</span><span class="s4">&quot;title&quot;</span><span class="s3">] = </span><span class="s1">title</span>
+
+    <span class="s3">@</span><span class="s1">property</span>
+    <span class="s2">def </span><span class="s1">total_duration</span><span class="s3">(</span><span class="s1">self</span><span class="s3">):</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_total_duration</span>
+
+    <span class="s3">@</span><span class="s1">total_duration</span><span class="s3">.</span><span class="s1">setter</span>
+    <span class="s2">def </span><span class="s1">total_duration</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">duration</span><span class="s3">):</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_total_duration </span><span class="s3">= </span><span class="s1">duration</span>
+
+    <span class="s2">def </span><span class="s1">set_data</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">key</span><span class="s3">, </span><span class="s1">value</span><span class="s3">):</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_data</span><span class="s3">[</span><span class="s1">key</span><span class="s3">] = </span><span class="s1">value</span>
+
+    <span class="s2">def </span><span class="s1">add_test</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">test_data</span><span class="s3">, </span><span class="s1">report</span><span class="s3">, </span><span class="s1">logs</span><span class="s3">):</span>
+        <span class="s0"># regardless of pass or fail we must add teardown logging to &quot;call&quot;</span>
+        <span class="s2">if </span><span class="s1">report</span><span class="s3">.</span><span class="s1">when </span><span class="s3">== </span><span class="s4">&quot;teardown&quot;</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">append_teardown_log</span><span class="s3">(</span><span class="s1">report</span><span class="s3">)</span>
+
+        <span class="s0"># passed &quot;setup&quot; and &quot;teardown&quot; are not added to the html</span>
+        <span class="s2">if </span><span class="s1">report</span><span class="s3">.</span><span class="s1">when </span><span class="s3">== </span><span class="s4">&quot;call&quot; </span><span class="s2">or </span><span class="s3">(</span>
+            <span class="s1">report</span><span class="s3">.</span><span class="s1">when </span><span class="s2">in </span><span class="s3">[</span><span class="s4">&quot;setup&quot;</span><span class="s3">, </span><span class="s4">&quot;teardown&quot;</span><span class="s3">] </span><span class="s2">and </span><span class="s1">report</span><span class="s3">.</span><span class="s1">outcome </span><span class="s3">!= </span><span class="s4">&quot;passed&quot;</span>
+        <span class="s3">):</span>
+            <span class="s1">test_data</span><span class="s3">[</span><span class="s4">&quot;log&quot;</span><span class="s3">] = </span><span class="s1">_handle_ansi</span><span class="s3">(</span><span class="s4">&quot;</span><span class="s2">\n</span><span class="s4">&quot;</span><span class="s3">.</span><span class="s1">join</span><span class="s3">(</span><span class="s1">logs</span><span class="s3">))</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_data</span><span class="s3">[</span><span class="s4">&quot;tests&quot;</span><span class="s3">][</span><span class="s1">report</span><span class="s3">.</span><span class="s1">nodeid</span><span class="s3">].</span><span class="s1">append</span><span class="s3">(</span><span class="s1">test_data</span><span class="s3">)</span>
+            <span class="s2">return True</span>
+
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">append_teardown_log</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">report</span><span class="s3">):</span>
+        <span class="s1">log </span><span class="s3">= []</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_data</span><span class="s3">[</span><span class="s4">&quot;tests&quot;</span><span class="s3">][</span><span class="s1">report</span><span class="s3">.</span><span class="s1">nodeid</span><span class="s3">]:</span>
+            <span class="s0"># Last index is &quot;call&quot;</span>
+            <span class="s1">test </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_data</span><span class="s3">[</span><span class="s4">&quot;tests&quot;</span><span class="s3">][</span><span class="s1">report</span><span class="s3">.</span><span class="s1">nodeid</span><span class="s3">][-</span><span class="s5">1</span><span class="s3">]</span>
+            <span class="s2">for </span><span class="s1">section </span><span class="s2">in </span><span class="s1">report</span><span class="s3">.</span><span class="s1">sections</span><span class="s3">:</span>
+                <span class="s1">header</span><span class="s3">, </span><span class="s1">content </span><span class="s3">= </span><span class="s1">section</span>
+                <span class="s2">if </span><span class="s4">&quot;teardown&quot; </span><span class="s2">in </span><span class="s1">header</span><span class="s3">:</span>
+                    <span class="s1">log</span><span class="s3">.</span><span class="s1">append</span><span class="s3">(</span><span class="s4">f&quot;</span><span class="s2">{</span><span class="s4">' ' </span><span class="s3">+ </span><span class="s1">header </span><span class="s3">+ </span><span class="s4">' '</span><span class="s2">:</span><span class="s4">-^80</span><span class="s2">}\n{</span><span class="s1">content</span><span class="s2">}</span><span class="s4">&quot;</span><span class="s3">)</span>
+            <span class="s1">test</span><span class="s3">[</span><span class="s4">&quot;log&quot;</span><span class="s3">] += </span><span class="s1">_handle_ansi</span><span class="s3">(</span><span class="s4">&quot;</span><span class="s2">\n</span><span class="s4">&quot;</span><span class="s3">.</span><span class="s1">join</span><span class="s3">(</span><span class="s1">log</span><span class="s3">))</span>
+</pre>
+</body>
+</html>

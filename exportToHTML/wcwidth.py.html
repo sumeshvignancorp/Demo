@@ -1,0 +1,78 @@
+<html>
+<head>
+<title>wcwidth.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #2aacb8;}
+.s4 { color: #5f826b; font-style: italic;}
+.s5 { color: #7a7e85;}
+.s6 { color: #6aab73;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+wcwidth.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">unicodedata</span>
+<span class="s0">from </span><span class="s1">functools </span><span class="s0">import </span><span class="s1">lru_cache</span>
+
+
+<span class="s2">@</span><span class="s1">lru_cache</span><span class="s2">(</span><span class="s3">100</span><span class="s2">)</span>
+<span class="s0">def </span><span class="s1">wcwidth</span><span class="s2">(</span><span class="s1">c</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; int</span><span class="s2">:</span>
+    <span class="s4">&quot;&quot;&quot;Determine how many columns are needed to display a character in a terminal. 
+ 
+    Returns -1 if the character is not printable. 
+    Returns 0, 1 or 2 for other characters. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">o </span><span class="s2">= </span><span class="s1">ord</span><span class="s2">(</span><span class="s1">c</span><span class="s2">)</span>
+
+    <span class="s5"># ASCII fast path.</span>
+    <span class="s0">if </span><span class="s3">0x20 </span><span class="s2">&lt;= </span><span class="s1">o </span><span class="s2">&lt; </span><span class="s3">0x07F</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s3">1</span>
+
+    <span class="s5"># Some Cf/Zp/Zl characters which should be zero-width.</span>
+    <span class="s0">if </span><span class="s2">(</span>
+        <span class="s1">o </span><span class="s2">== </span><span class="s3">0x0000</span>
+        <span class="s0">or </span><span class="s3">0x200B </span><span class="s2">&lt;= </span><span class="s1">o </span><span class="s2">&lt;= </span><span class="s3">0x200F</span>
+        <span class="s0">or </span><span class="s3">0x2028 </span><span class="s2">&lt;= </span><span class="s1">o </span><span class="s2">&lt;= </span><span class="s3">0x202E</span>
+        <span class="s0">or </span><span class="s3">0x2060 </span><span class="s2">&lt;= </span><span class="s1">o </span><span class="s2">&lt;= </span><span class="s3">0x2063</span>
+    <span class="s2">):</span>
+        <span class="s0">return </span><span class="s3">0</span>
+
+    <span class="s1">category </span><span class="s2">= </span><span class="s1">unicodedata</span><span class="s2">.</span><span class="s1">category</span><span class="s2">(</span><span class="s1">c</span><span class="s2">)</span>
+
+    <span class="s5"># Control characters.</span>
+    <span class="s0">if </span><span class="s1">category </span><span class="s2">== </span><span class="s6">&quot;Cc&quot;</span><span class="s2">:</span>
+        <span class="s0">return </span><span class="s2">-</span><span class="s3">1</span>
+
+    <span class="s5"># Combining characters with zero width.</span>
+    <span class="s0">if </span><span class="s1">category </span><span class="s0">in </span><span class="s2">(</span><span class="s6">&quot;Me&quot;</span><span class="s2">, </span><span class="s6">&quot;Mn&quot;</span><span class="s2">):</span>
+        <span class="s0">return </span><span class="s3">0</span>
+
+    <span class="s5"># Full/Wide east asian characters.</span>
+    <span class="s0">if </span><span class="s1">unicodedata</span><span class="s2">.</span><span class="s1">east_asian_width</span><span class="s2">(</span><span class="s1">c</span><span class="s2">) </span><span class="s0">in </span><span class="s2">(</span><span class="s6">&quot;F&quot;</span><span class="s2">, </span><span class="s6">&quot;W&quot;</span><span class="s2">):</span>
+        <span class="s0">return </span><span class="s3">2</span>
+
+    <span class="s0">return </span><span class="s3">1</span>
+
+
+<span class="s0">def </span><span class="s1">wcswidth</span><span class="s2">(</span><span class="s1">s</span><span class="s2">: </span><span class="s1">str</span><span class="s2">) </span><span class="s1">-&gt; int</span><span class="s2">:</span>
+    <span class="s4">&quot;&quot;&quot;Determine how many columns are needed to display a string in a terminal. 
+ 
+    Returns -1 if the string contains non-printable characters. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">width </span><span class="s2">= </span><span class="s3">0</span>
+    <span class="s0">for </span><span class="s1">c </span><span class="s0">in </span><span class="s1">unicodedata</span><span class="s2">.</span><span class="s1">normalize</span><span class="s2">(</span><span class="s6">&quot;NFC&quot;</span><span class="s2">, </span><span class="s1">s</span><span class="s2">):</span>
+        <span class="s1">wc </span><span class="s2">= </span><span class="s1">wcwidth</span><span class="s2">(</span><span class="s1">c</span><span class="s2">)</span>
+        <span class="s0">if </span><span class="s1">wc </span><span class="s2">&lt; </span><span class="s3">0</span><span class="s2">:</span>
+            <span class="s0">return </span><span class="s2">-</span><span class="s3">1</span>
+        <span class="s1">width </span><span class="s2">+= </span><span class="s1">wc</span>
+    <span class="s0">return </span><span class="s1">width</span>
+</pre>
+</body>
+</html>

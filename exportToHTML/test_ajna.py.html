@@ -1,0 +1,41 @@
+<html>
+<head>
+<title>test_ajna.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #6aab73;}
+.s4 { color: #2aacb8;}
+.s5 { color: #7a7e85;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+test_ajna.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">time</span>
+
+<span class="s0">from </span><span class="s1">selenium </span><span class="s0">import </span><span class="s1">webdriver</span>
+<span class="s0">from </span><span class="s1">selenium</span><span class="s2">.</span><span class="s1">webdriver</span><span class="s2">.</span><span class="s1">chrome</span><span class="s2">.</span><span class="s1">service </span><span class="s0">import </span><span class="s1">Service </span><span class="s0">as </span><span class="s1">ChromeService</span>
+<span class="s0">from </span><span class="s1">selenium</span><span class="s2">.</span><span class="s1">webdriver</span><span class="s2">.</span><span class="s1">support</span><span class="s2">.</span><span class="s1">select </span><span class="s0">import </span><span class="s1">Select</span>
+<span class="s0">from </span><span class="s1">webdriver_manager</span><span class="s2">.</span><span class="s1">chrome </span><span class="s0">import </span><span class="s1">ChromeDriverManager</span>
+
+
+<span class="s0">def </span><span class="s1">test_dropdown</span><span class="s2">():</span>
+    <span class="s1">driver </span><span class="s2">= </span><span class="s1">webdriver</span><span class="s2">.</span><span class="s1">Chrome</span><span class="s2">(</span><span class="s1">service</span><span class="s2">=</span><span class="s1">ChromeService</span><span class="s2">(</span><span class="s1">ChromeDriverManager</span><span class="s2">().</span><span class="s1">install</span><span class="s2">()))</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">maximize_window</span><span class="s2">()</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">get</span><span class="s2">(</span><span class="s3">&quot;https://pg.ajnaview.net/&quot;</span><span class="s2">)</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s4">3</span><span class="s2">)</span>
+
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s3">&quot;xpath&quot;</span><span class="s2">, </span><span class="s3">&quot;//div[@role='combobox']&quot;</span><span class="s2">).</span><span class="s1">click</span><span class="s2">()</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s3">&quot;xpath&quot;</span><span class="s2">, </span><span class="s3">&quot;//input[@value='en']&quot;</span><span class="s2">)</span>
+    <span class="s5"># drop = Select(driver.find_element(&quot;xpath&quot;, &quot;//input[@value='en']&quot;))</span>
+    <span class="s5"># drop.select_by_index(3)</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s4">6</span><span class="s2">)</span>
+</pre>
+</body>
+</html>

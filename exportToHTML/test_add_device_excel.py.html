@@ -1,0 +1,50 @@
+<html>
+<head>
+<title>test_add_device_excel.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #6aab73;}
+.s4 { color: #2aacb8;}
+.s5 { color: #7a7e85;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+test_add_device_excel.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">time</span>
+
+<span class="s0">import </span><span class="s1">openpyxl</span>
+<span class="s0">import </span><span class="s1">pytest</span>
+<span class="s0">from </span><span class="s1">selenium </span><span class="s0">import </span><span class="s1">webdriver</span>
+<span class="s0">from </span><span class="s1">selenium</span><span class="s2">.</span><span class="s1">webdriver</span><span class="s2">.</span><span class="s1">chrome</span><span class="s2">.</span><span class="s1">service </span><span class="s0">import </span><span class="s1">Service </span><span class="s0">as </span><span class="s1">ChromeService</span>
+<span class="s0">from </span><span class="s1">webdriver_manager</span><span class="s2">.</span><span class="s1">chrome </span><span class="s0">import </span><span class="s1">ChromeDriverManager</span>
+<span class="s0">from </span><span class="s1">Utilities </span><span class="s0">import </span><span class="s1">ExcelReader</span>
+
+<span class="s1">excel_path </span><span class="s2">= </span><span class="s3">&quot;ExcelFiles/Ajnaviewlogindata.xlsx&quot;</span>
+<span class="s1">workbook </span><span class="s2">= </span><span class="s1">openpyxl</span><span class="s2">.</span><span class="s1">load_workbook</span><span class="s2">(</span><span class="s1">excel_path</span><span class="s2">)</span>
+<span class="s1">sheet </span><span class="s2">= </span><span class="s1">workbook</span><span class="s2">.</span><span class="s1">active</span>
+
+
+<span class="s2">@</span><span class="s1">pytest</span><span class="s2">.</span><span class="s1">mark</span><span class="s2">.</span><span class="s1">parametrize</span><span class="s2">(</span><span class="s3">&quot;username,password&quot;</span><span class="s2">,</span>
+                         <span class="s1">ExcelReader</span><span class="s2">.</span><span class="s1">get_data_from_excel</span><span class="s2">(</span><span class="s3">&quot;ExcelFiles/Ajnaviewlogindata.xlsx&quot;</span><span class="s2">, </span><span class="s3">&quot;LoginTest&quot;</span><span class="s2">))</span>
+<span class="s0">def </span><span class="s1">test_login_valid_credentials</span><span class="s2">(</span><span class="s1">username</span><span class="s2">, </span><span class="s1">password</span><span class="s2">):</span>
+    <span class="s1">driver </span><span class="s2">= </span><span class="s1">webdriver</span><span class="s2">.</span><span class="s1">Chrome</span><span class="s2">(</span><span class="s1">service</span><span class="s2">=</span><span class="s1">ChromeService</span><span class="s2">(</span><span class="s1">ChromeDriverManager</span><span class="s2">().</span><span class="s1">install</span><span class="s2">()))</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">maximize_window</span><span class="s2">()</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">get</span><span class="s2">(</span><span class="s3">'https://pg.ajnaview.net/'</span><span class="s2">)</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s4">5</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s3">&quot;name&quot;</span><span class="s2">, </span><span class="s3">&quot;email&quot;</span><span class="s2">).</span><span class="s1">send_keys</span><span class="s2">(</span><span class="s1">username</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s3">&quot;name&quot;</span><span class="s2">, </span><span class="s3">&quot;password&quot;</span><span class="s2">).</span><span class="s1">send_keys</span><span class="s2">(</span><span class="s1">password</span><span class="s2">)</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s4">2</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s3">&quot;xpath&quot;</span><span class="s2">, </span><span class="s3">&quot;(//button[@type='button'])[2]&quot;</span><span class="s2">).</span><span class="s1">click</span><span class="s2">()  </span><span class="s5"># Login Button</span>
+    <span class="s1">print</span><span class="s2">(</span><span class="s3">&quot;Title :&quot;</span><span class="s2">, </span><span class="s1">driver</span><span class="s2">.</span><span class="s1">title</span><span class="s2">)</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s4">10</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">close</span><span class="s2">()</span>
+</pre>
+</body>
+</html>

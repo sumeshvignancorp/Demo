@@ -1,0 +1,1106 @@
+<html>
+<head>
+<title>capture.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5f826b; font-style: italic;}
+.s1 { color: #bcbec4;}
+.s2 { color: #cf8e6d;}
+.s3 { color: #bcbec4;}
+.s4 { color: #6aab73;}
+.s5 { color: #7a7e85;}
+.s6 { color: #2aacb8;}
+.s7 { color: #a5c261;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+capture.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot;Per-test stdout/stderr capturing mechanism.&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">abc</span>
+<span class="s2">import </span><span class="s1">collections</span>
+<span class="s2">import </span><span class="s1">contextlib</span>
+<span class="s2">import </span><span class="s1">io</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">from </span><span class="s1">io </span><span class="s2">import </span><span class="s1">UnsupportedOperation</span>
+<span class="s2">from </span><span class="s1">tempfile </span><span class="s2">import </span><span class="s1">TemporaryFile</span>
+<span class="s2">from </span><span class="s1">types </span><span class="s2">import </span><span class="s1">TracebackType</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Any</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">AnyStr</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">BinaryIO</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Generator</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Generic</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Iterable</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Iterator</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">List</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">NamedTuple</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Optional</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">TextIO</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Tuple</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Type</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">TYPE_CHECKING</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Union</span>
+
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">compat </span><span class="s2">import </span><span class="s1">final</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">config </span><span class="s2">import </span><span class="s1">Config</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">config </span><span class="s2">import </span><span class="s1">hookimpl</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">config</span><span class="s3">.</span><span class="s1">argparsing </span><span class="s2">import </span><span class="s1">Parser</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">deprecated </span><span class="s2">import </span><span class="s1">check_ispytest</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">fixtures </span><span class="s2">import </span><span class="s1">fixture</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">fixtures </span><span class="s2">import </span><span class="s1">SubRequest</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">nodes </span><span class="s2">import </span><span class="s1">Collector</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">nodes </span><span class="s2">import </span><span class="s1">File</span>
+<span class="s2">from </span><span class="s1">_pytest</span><span class="s3">.</span><span class="s1">nodes </span><span class="s2">import </span><span class="s1">Item</span>
+
+<span class="s2">if </span><span class="s1">TYPE_CHECKING</span><span class="s3">:</span>
+    <span class="s2">from </span><span class="s1">typing_extensions </span><span class="s2">import </span><span class="s1">Final</span>
+    <span class="s2">from </span><span class="s1">typing_extensions </span><span class="s2">import </span><span class="s1">Literal</span>
+
+    <span class="s1">_CaptureMethod </span><span class="s3">= </span><span class="s1">Literal</span><span class="s3">[</span><span class="s4">&quot;fd&quot;</span><span class="s3">, </span><span class="s4">&quot;sys&quot;</span><span class="s3">, </span><span class="s4">&quot;no&quot;</span><span class="s3">, </span><span class="s4">&quot;tee-sys&quot;</span><span class="s3">]</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_addoption</span><span class="s3">(</span><span class="s1">parser</span><span class="s3">: </span><span class="s1">Parser</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+    <span class="s1">group </span><span class="s3">= </span><span class="s1">parser</span><span class="s3">.</span><span class="s1">getgroup</span><span class="s3">(</span><span class="s4">&quot;general&quot;</span><span class="s3">)</span>
+    <span class="s1">group</span><span class="s3">.</span><span class="s1">_addoption</span><span class="s3">(</span>
+        <span class="s4">&quot;--capture&quot;</span><span class="s3">,</span>
+        <span class="s1">action</span><span class="s3">=</span><span class="s4">&quot;store&quot;</span><span class="s3">,</span>
+        <span class="s1">default</span><span class="s3">=</span><span class="s4">&quot;fd&quot;</span><span class="s3">,</span>
+        <span class="s1">metavar</span><span class="s3">=</span><span class="s4">&quot;method&quot;</span><span class="s3">,</span>
+        <span class="s1">choices</span><span class="s3">=[</span><span class="s4">&quot;fd&quot;</span><span class="s3">, </span><span class="s4">&quot;sys&quot;</span><span class="s3">, </span><span class="s4">&quot;no&quot;</span><span class="s3">, </span><span class="s4">&quot;tee-sys&quot;</span><span class="s3">],</span>
+        <span class="s1">help</span><span class="s3">=</span><span class="s4">&quot;Per-test capturing method: one of fd|sys|no|tee-sys&quot;</span><span class="s3">,</span>
+    <span class="s3">)</span>
+    <span class="s1">group</span><span class="s3">.</span><span class="s1">_addoption</span><span class="s3">(</span>
+        <span class="s4">&quot;-s&quot;</span><span class="s3">,</span>
+        <span class="s1">action</span><span class="s3">=</span><span class="s4">&quot;store_const&quot;</span><span class="s3">,</span>
+        <span class="s1">const</span><span class="s3">=</span><span class="s4">&quot;no&quot;</span><span class="s3">,</span>
+        <span class="s1">dest</span><span class="s3">=</span><span class="s4">&quot;capture&quot;</span><span class="s3">,</span>
+        <span class="s1">help</span><span class="s3">=</span><span class="s4">&quot;Shortcut for --capture=no&quot;</span><span class="s3">,</span>
+    <span class="s3">)</span>
+
+
+<span class="s2">def </span><span class="s1">_colorama_workaround</span><span class="s3">() </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+    <span class="s0">&quot;&quot;&quot;Ensure colorama is imported so that it attaches to the correct stdio 
+    handles on Windows. 
+ 
+    colorama uses the terminal on import time. So if something does the 
+    first import of colorama while I/O capture is active, colorama will 
+    fail in various ways. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">sys</span><span class="s3">.</span><span class="s1">platform</span><span class="s3">.</span><span class="s1">startswith</span><span class="s3">(</span><span class="s4">&quot;win32&quot;</span><span class="s3">):</span>
+        <span class="s2">try</span><span class="s3">:</span>
+            <span class="s2">import </span><span class="s1">colorama  </span><span class="s5"># noqa: F401</span>
+        <span class="s2">except </span><span class="s1">ImportError</span><span class="s3">:</span>
+            <span class="s2">pass</span>
+
+
+<span class="s2">def </span><span class="s1">_windowsconsoleio_workaround</span><span class="s3">(</span><span class="s1">stream</span><span class="s3">: </span><span class="s1">TextIO</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+    <span class="s0">&quot;&quot;&quot;Workaround for Windows Unicode console handling. 
+ 
+    Python 3.6 implemented Unicode console handling for Windows. This works 
+    by reading/writing to the raw console handle using 
+    ``{Read,Write}ConsoleW``. 
+ 
+    The problem is that we are going to ``dup2`` over the stdio file 
+    descriptors when doing ``FDCapture`` and this will ``CloseHandle`` the 
+    handles used by Python to write to the console. Though there is still some 
+    weirdness and the console handle seems to only be closed randomly and not 
+    on the first call to ``CloseHandle``, or maybe it gets reopened with the 
+    same handle value when we suspend capturing. 
+ 
+    The workaround in this case will reopen stdio with a different fd which 
+    also means a different handle by replicating the logic in 
+    &quot;Py_lifecycle.c:initstdio/create_stdio&quot;. 
+ 
+    :param stream: 
+        In practice ``sys.stdout`` or ``sys.stderr``, but given 
+        here as parameter for unittesting purposes. 
+ 
+    See https://github.com/pytest-dev/py/issues/103. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if not </span><span class="s1">sys</span><span class="s3">.</span><span class="s1">platform</span><span class="s3">.</span><span class="s1">startswith</span><span class="s3">(</span><span class="s4">&quot;win32&quot;</span><span class="s3">) </span><span class="s2">or </span><span class="s1">hasattr</span><span class="s3">(</span><span class="s1">sys</span><span class="s3">, </span><span class="s4">&quot;pypy_version_info&quot;</span><span class="s3">):</span>
+        <span class="s2">return</span>
+
+    <span class="s5"># Bail out if ``stream`` doesn't seem like a proper ``io`` stream (#2666).</span>
+    <span class="s2">if not </span><span class="s1">hasattr</span><span class="s3">(</span><span class="s1">stream</span><span class="s3">, </span><span class="s4">&quot;buffer&quot;</span><span class="s3">):  </span><span class="s5"># type: ignore[unreachable]</span>
+        <span class="s2">return</span>
+
+    <span class="s1">buffered </span><span class="s3">= </span><span class="s1">hasattr</span><span class="s3">(</span><span class="s1">stream</span><span class="s3">.</span><span class="s1">buffer</span><span class="s3">, </span><span class="s4">&quot;raw&quot;</span><span class="s3">)</span>
+    <span class="s1">raw_stdout </span><span class="s3">= </span><span class="s1">stream</span><span class="s3">.</span><span class="s1">buffer</span><span class="s3">.</span><span class="s1">raw </span><span class="s2">if </span><span class="s1">buffered </span><span class="s2">else </span><span class="s1">stream</span><span class="s3">.</span><span class="s1">buffer  </span><span class="s5"># type: ignore[attr-defined]</span>
+
+    <span class="s2">if not </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">raw_stdout</span><span class="s3">, </span><span class="s1">io</span><span class="s3">.</span><span class="s1">_WindowsConsoleIO</span><span class="s3">):  </span><span class="s5"># type: ignore[attr-defined]</span>
+        <span class="s2">return</span>
+
+    <span class="s2">def </span><span class="s1">_reopen_stdio</span><span class="s3">(</span><span class="s1">f</span><span class="s3">, </span><span class="s1">mode</span><span class="s3">):</span>
+        <span class="s2">if not </span><span class="s1">buffered </span><span class="s2">and </span><span class="s1">mode</span><span class="s3">[</span><span class="s6">0</span><span class="s3">] == </span><span class="s4">&quot;w&quot;</span><span class="s3">:</span>
+            <span class="s1">buffering </span><span class="s3">= </span><span class="s6">0</span>
+        <span class="s2">else</span><span class="s3">:</span>
+            <span class="s1">buffering </span><span class="s3">= -</span><span class="s6">1</span>
+
+        <span class="s2">return </span><span class="s1">io</span><span class="s3">.</span><span class="s1">TextIOWrapper</span><span class="s3">(</span>
+            <span class="s1">open</span><span class="s3">(</span><span class="s1">os</span><span class="s3">.</span><span class="s1">dup</span><span class="s3">(</span><span class="s1">f</span><span class="s3">.</span><span class="s1">fileno</span><span class="s3">()), </span><span class="s1">mode</span><span class="s3">, </span><span class="s1">buffering</span><span class="s3">),</span>
+            <span class="s1">f</span><span class="s3">.</span><span class="s1">encoding</span><span class="s3">,</span>
+            <span class="s1">f</span><span class="s3">.</span><span class="s1">errors</span><span class="s3">,</span>
+            <span class="s1">f</span><span class="s3">.</span><span class="s1">newlines</span><span class="s3">,</span>
+            <span class="s1">f</span><span class="s3">.</span><span class="s1">line_buffering</span><span class="s3">,</span>
+        <span class="s3">)</span>
+
+    <span class="s1">sys</span><span class="s3">.</span><span class="s1">stdin </span><span class="s3">= </span><span class="s1">_reopen_stdio</span><span class="s3">(</span><span class="s1">sys</span><span class="s3">.</span><span class="s1">stdin</span><span class="s3">, </span><span class="s4">&quot;rb&quot;</span><span class="s3">)</span>
+    <span class="s1">sys</span><span class="s3">.</span><span class="s1">stdout </span><span class="s3">= </span><span class="s1">_reopen_stdio</span><span class="s3">(</span><span class="s1">sys</span><span class="s3">.</span><span class="s1">stdout</span><span class="s3">, </span><span class="s4">&quot;wb&quot;</span><span class="s3">)</span>
+    <span class="s1">sys</span><span class="s3">.</span><span class="s1">stderr </span><span class="s3">= </span><span class="s1">_reopen_stdio</span><span class="s3">(</span><span class="s1">sys</span><span class="s3">.</span><span class="s1">stderr</span><span class="s3">, </span><span class="s4">&quot;wb&quot;</span><span class="s3">)</span>
+
+
+<span class="s3">@</span><span class="s1">hookimpl</span><span class="s3">(</span><span class="s1">hookwrapper</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+<span class="s2">def </span><span class="s1">pytest_load_initial_conftests</span><span class="s3">(</span><span class="s1">early_config</span><span class="s3">: </span><span class="s1">Config</span><span class="s3">):</span>
+    <span class="s1">ns </span><span class="s3">= </span><span class="s1">early_config</span><span class="s3">.</span><span class="s1">known_args_namespace</span>
+    <span class="s2">if </span><span class="s1">ns</span><span class="s3">.</span><span class="s1">capture </span><span class="s3">== </span><span class="s4">&quot;fd&quot;</span><span class="s3">:</span>
+        <span class="s1">_windowsconsoleio_workaround</span><span class="s3">(</span><span class="s1">sys</span><span class="s3">.</span><span class="s1">stdout</span><span class="s3">)</span>
+    <span class="s1">_colorama_workaround</span><span class="s3">()</span>
+    <span class="s1">pluginmanager </span><span class="s3">= </span><span class="s1">early_config</span><span class="s3">.</span><span class="s1">pluginmanager</span>
+    <span class="s1">capman </span><span class="s3">= </span><span class="s1">CaptureManager</span><span class="s3">(</span><span class="s1">ns</span><span class="s3">.</span><span class="s1">capture</span><span class="s3">)</span>
+    <span class="s1">pluginmanager</span><span class="s3">.</span><span class="s1">register</span><span class="s3">(</span><span class="s1">capman</span><span class="s3">, </span><span class="s4">&quot;capturemanager&quot;</span><span class="s3">)</span>
+
+    <span class="s5"># Make sure that capturemanager is properly reset at final shutdown.</span>
+    <span class="s1">early_config</span><span class="s3">.</span><span class="s1">add_cleanup</span><span class="s3">(</span><span class="s1">capman</span><span class="s3">.</span><span class="s1">stop_global_capturing</span><span class="s3">)</span>
+
+    <span class="s5"># Finally trigger conftest loading but while capturing (issue #93).</span>
+    <span class="s1">capman</span><span class="s3">.</span><span class="s1">start_global_capturing</span><span class="s3">()</span>
+    <span class="s1">outcome </span><span class="s3">= </span><span class="s2">yield</span>
+    <span class="s1">capman</span><span class="s3">.</span><span class="s1">suspend_global_capture</span><span class="s3">()</span>
+    <span class="s2">if </span><span class="s1">outcome</span><span class="s3">.</span><span class="s1">excinfo </span><span class="s2">is not None</span><span class="s3">:</span>
+        <span class="s1">out</span><span class="s3">, </span><span class="s1">err </span><span class="s3">= </span><span class="s1">capman</span><span class="s3">.</span><span class="s1">read_global_capture</span><span class="s3">()</span>
+        <span class="s1">sys</span><span class="s3">.</span><span class="s1">stdout</span><span class="s3">.</span><span class="s1">write</span><span class="s3">(</span><span class="s1">out</span><span class="s3">)</span>
+        <span class="s1">sys</span><span class="s3">.</span><span class="s1">stderr</span><span class="s3">.</span><span class="s1">write</span><span class="s3">(</span><span class="s1">err</span><span class="s3">)</span>
+
+
+<span class="s5"># IO Helpers.</span>
+
+
+<span class="s2">class </span><span class="s1">EncodedFile</span><span class="s3">(</span><span class="s1">io</span><span class="s3">.</span><span class="s1">TextIOWrapper</span><span class="s3">):</span>
+    <span class="s1">__slots__ </span><span class="s3">= ()</span>
+
+    <span class="s3">@</span><span class="s1">property</span>
+    <span class="s2">def </span><span class="s1">name</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+        <span class="s5"># Ensure that file.name is a string. Workaround for a Python bug</span>
+        <span class="s5"># fixed in &gt;=3.7.4: https://bugs.python.org/issue36015</span>
+        <span class="s2">return </span><span class="s1">repr</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">buffer</span><span class="s3">)</span>
+
+    <span class="s3">@</span><span class="s1">property</span>
+    <span class="s2">def </span><span class="s1">mode</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+        <span class="s5"># TextIOWrapper doesn't expose a mode, but at least some of our</span>
+        <span class="s5"># tests check it.</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">buffer</span><span class="s3">.</span><span class="s1">mode</span><span class="s3">.</span><span class="s1">replace</span><span class="s3">(</span><span class="s4">&quot;b&quot;</span><span class="s3">, </span><span class="s4">&quot;&quot;</span><span class="s3">)</span>
+
+
+<span class="s2">class </span><span class="s1">CaptureIO</span><span class="s3">(</span><span class="s1">io</span><span class="s3">.</span><span class="s1">TextIOWrapper</span><span class="s3">):</span>
+    <span class="s2">def </span><span class="s1">__init__</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">super</span><span class="s3">().</span><span class="s1">__init__</span><span class="s3">(</span><span class="s1">io</span><span class="s3">.</span><span class="s1">BytesIO</span><span class="s3">(), </span><span class="s1">encoding</span><span class="s3">=</span><span class="s4">&quot;UTF-8&quot;</span><span class="s3">, </span><span class="s1">newline</span><span class="s3">=</span><span class="s4">&quot;&quot;</span><span class="s3">, </span><span class="s1">write_through</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">getvalue</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+        <span class="s2">assert </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">buffer</span><span class="s3">, </span><span class="s1">io</span><span class="s3">.</span><span class="s1">BytesIO</span><span class="s3">)</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">buffer</span><span class="s3">.</span><span class="s1">getvalue</span><span class="s3">().</span><span class="s1">decode</span><span class="s3">(</span><span class="s4">&quot;UTF-8&quot;</span><span class="s3">)</span>
+
+
+<span class="s2">class </span><span class="s1">TeeCaptureIO</span><span class="s3">(</span><span class="s1">CaptureIO</span><span class="s3">):</span>
+    <span class="s2">def </span><span class="s1">__init__</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">other</span><span class="s3">: </span><span class="s1">TextIO</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_other </span><span class="s3">= </span><span class="s1">other</span>
+        <span class="s1">super</span><span class="s3">().</span><span class="s1">__init__</span><span class="s3">()</span>
+
+    <span class="s2">def </span><span class="s1">write</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">s</span><span class="s3">: </span><span class="s1">str</span><span class="s3">) </span><span class="s1">-&gt; int</span><span class="s3">:</span>
+        <span class="s1">super</span><span class="s3">().</span><span class="s1">write</span><span class="s3">(</span><span class="s1">s</span><span class="s3">)</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_other</span><span class="s3">.</span><span class="s1">write</span><span class="s3">(</span><span class="s1">s</span><span class="s3">)</span>
+
+
+<span class="s2">class </span><span class="s1">DontReadFromInput</span><span class="s3">(</span><span class="s1">TextIO</span><span class="s3">):</span>
+    <span class="s3">@</span><span class="s1">property</span>
+    <span class="s2">def </span><span class="s1">encoding</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+        <span class="s2">return </span><span class="s1">sys</span><span class="s3">.</span><span class="s1">__stdin__</span><span class="s3">.</span><span class="s1">encoding</span>
+
+    <span class="s2">def </span><span class="s1">read</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">size</span><span class="s3">: </span><span class="s1">int </span><span class="s3">= -</span><span class="s6">1</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+        <span class="s2">raise </span><span class="s1">OSError</span><span class="s3">(</span>
+            <span class="s4">&quot;pytest: reading from stdin while output is captured!  Consider using `-s`.&quot;</span>
+        <span class="s3">)</span>
+
+    <span class="s1">readline </span><span class="s3">= </span><span class="s1">read</span>
+
+    <span class="s2">def </span><span class="s1">__next__</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">readline</span><span class="s3">()</span>
+
+    <span class="s2">def </span><span class="s1">readlines</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">hint</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">int</span><span class="s3">] = -</span><span class="s6">1</span><span class="s3">) </span><span class="s1">-&gt; List</span><span class="s3">[</span><span class="s1">str</span><span class="s3">]:</span>
+        <span class="s2">raise </span><span class="s1">OSError</span><span class="s3">(</span>
+            <span class="s4">&quot;pytest: reading from stdin while output is captured!  Consider using `-s`.&quot;</span>
+        <span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">__iter__</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; Iterator</span><span class="s3">[</span><span class="s1">str</span><span class="s3">]:</span>
+        <span class="s2">return </span><span class="s1">self</span>
+
+    <span class="s2">def </span><span class="s1">fileno</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; int</span><span class="s3">:</span>
+        <span class="s2">raise </span><span class="s1">UnsupportedOperation</span><span class="s3">(</span><span class="s4">&quot;redirected stdin is pseudofile, has no fileno()&quot;</span><span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">flush</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">raise </span><span class="s1">UnsupportedOperation</span><span class="s3">(</span><span class="s4">&quot;redirected stdin is pseudofile, has no flush()&quot;</span><span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">isatty</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; bool</span><span class="s3">:</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">close</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">readable</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; bool</span><span class="s3">:</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">seek</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">offset</span><span class="s3">: </span><span class="s1">int</span><span class="s3">, </span><span class="s1">whence</span><span class="s3">: </span><span class="s1">int </span><span class="s3">= </span><span class="s6">0</span><span class="s3">) </span><span class="s1">-&gt; int</span><span class="s3">:</span>
+        <span class="s2">raise </span><span class="s1">UnsupportedOperation</span><span class="s3">(</span><span class="s4">&quot;redirected stdin is pseudofile, has no seek(int)&quot;</span><span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">seekable</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; bool</span><span class="s3">:</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">tell</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; int</span><span class="s3">:</span>
+        <span class="s2">raise </span><span class="s1">UnsupportedOperation</span><span class="s3">(</span><span class="s4">&quot;redirected stdin is pseudofile, has no tell()&quot;</span><span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">truncate</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">size</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">int</span><span class="s3">] = </span><span class="s2">None</span><span class="s3">) </span><span class="s1">-&gt; int</span><span class="s3">:</span>
+        <span class="s2">raise </span><span class="s1">UnsupportedOperation</span><span class="s3">(</span><span class="s4">&quot;cannot truncate stdin&quot;</span><span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">write</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">data</span><span class="s3">: </span><span class="s1">str</span><span class="s3">) </span><span class="s1">-&gt; int</span><span class="s3">:</span>
+        <span class="s2">raise </span><span class="s1">UnsupportedOperation</span><span class="s3">(</span><span class="s4">&quot;cannot write to stdin&quot;</span><span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">writelines</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">lines</span><span class="s3">: </span><span class="s1">Iterable</span><span class="s3">[</span><span class="s1">str</span><span class="s3">]) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">raise </span><span class="s1">UnsupportedOperation</span><span class="s3">(</span><span class="s4">&quot;Cannot write to stdin&quot;</span><span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">writable</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; bool</span><span class="s3">:</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">__enter__</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s4">&quot;DontReadFromInput&quot;</span><span class="s3">:</span>
+        <span class="s2">return </span><span class="s1">self</span>
+
+    <span class="s2">def </span><span class="s1">__exit__</span><span class="s3">(</span>
+        <span class="s1">self</span><span class="s3">,</span>
+        <span class="s1">type</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">Type</span><span class="s3">[</span><span class="s1">BaseException</span><span class="s3">]],</span>
+        <span class="s1">value</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">BaseException</span><span class="s3">],</span>
+        <span class="s1">traceback</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">TracebackType</span><span class="s3">],</span>
+    <span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">pass</span>
+
+    <span class="s3">@</span><span class="s1">property</span>
+    <span class="s2">def </span><span class="s1">buffer</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; BinaryIO</span><span class="s3">:</span>
+        <span class="s5"># The str/bytes doesn't actually matter in this type, so OK to fake.</span>
+        <span class="s2">return </span><span class="s1">self  </span><span class="s5"># type: ignore[return-value]</span>
+
+
+<span class="s5"># Capture classes.</span>
+
+
+<span class="s2">class </span><span class="s1">CaptureBase</span><span class="s3">(</span><span class="s1">abc</span><span class="s3">.</span><span class="s1">ABC</span><span class="s3">, </span><span class="s1">Generic</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">]):</span>
+    <span class="s1">EMPTY_BUFFER</span><span class="s3">: </span><span class="s1">AnyStr</span>
+
+    <span class="s3">@</span><span class="s1">abc</span><span class="s3">.</span><span class="s1">abstractmethod</span>
+    <span class="s2">def </span><span class="s1">__init__</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">fd</span><span class="s3">: </span><span class="s1">int</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">raise </span><span class="s1">NotImplementedError</span><span class="s3">()</span>
+
+    <span class="s3">@</span><span class="s1">abc</span><span class="s3">.</span><span class="s1">abstractmethod</span>
+    <span class="s2">def </span><span class="s1">start</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">raise </span><span class="s1">NotImplementedError</span><span class="s3">()</span>
+
+    <span class="s3">@</span><span class="s1">abc</span><span class="s3">.</span><span class="s1">abstractmethod</span>
+    <span class="s2">def </span><span class="s1">done</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">raise </span><span class="s1">NotImplementedError</span><span class="s3">()</span>
+
+    <span class="s3">@</span><span class="s1">abc</span><span class="s3">.</span><span class="s1">abstractmethod</span>
+    <span class="s2">def </span><span class="s1">suspend</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">raise </span><span class="s1">NotImplementedError</span><span class="s3">()</span>
+
+    <span class="s3">@</span><span class="s1">abc</span><span class="s3">.</span><span class="s1">abstractmethod</span>
+    <span class="s2">def </span><span class="s1">resume</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">raise </span><span class="s1">NotImplementedError</span><span class="s3">()</span>
+
+    <span class="s3">@</span><span class="s1">abc</span><span class="s3">.</span><span class="s1">abstractmethod</span>
+    <span class="s2">def </span><span class="s1">writeorg</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">data</span><span class="s3">: </span><span class="s1">AnyStr</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">raise </span><span class="s1">NotImplementedError</span><span class="s3">()</span>
+
+    <span class="s3">@</span><span class="s1">abc</span><span class="s3">.</span><span class="s1">abstractmethod</span>
+    <span class="s2">def </span><span class="s1">snap</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; AnyStr</span><span class="s3">:</span>
+        <span class="s2">raise </span><span class="s1">NotImplementedError</span><span class="s3">()</span>
+
+
+<span class="s1">patchsysdict </span><span class="s3">= {</span><span class="s6">0</span><span class="s3">: </span><span class="s4">&quot;stdin&quot;</span><span class="s3">, </span><span class="s6">1</span><span class="s3">: </span><span class="s4">&quot;stdout&quot;</span><span class="s3">, </span><span class="s6">2</span><span class="s3">: </span><span class="s4">&quot;stderr&quot;</span><span class="s3">}</span>
+
+
+<span class="s2">class </span><span class="s1">NoCapture</span><span class="s3">(</span><span class="s1">CaptureBase</span><span class="s3">[</span><span class="s1">str</span><span class="s3">]):</span>
+    <span class="s1">EMPTY_BUFFER </span><span class="s3">= </span><span class="s4">&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">fd</span><span class="s3">: </span><span class="s1">int</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">start</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">done</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">suspend</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">resume</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">snap</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+        <span class="s2">return </span><span class="s4">&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">writeorg</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">data</span><span class="s3">: </span><span class="s1">str</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">pass</span>
+
+
+<span class="s2">class </span><span class="s1">SysCaptureBase</span><span class="s3">(</span><span class="s1">CaptureBase</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">]):</span>
+    <span class="s2">def </span><span class="s1">__init__</span><span class="s3">(</span>
+        <span class="s1">self</span><span class="s3">, </span><span class="s1">fd</span><span class="s3">: </span><span class="s1">int</span><span class="s3">, </span><span class="s1">tmpfile</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">TextIO</span><span class="s3">] = </span><span class="s2">None</span><span class="s3">, *, </span><span class="s1">tee</span><span class="s3">: </span><span class="s1">bool </span><span class="s3">= </span><span class="s2">False</span>
+    <span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">name </span><span class="s3">= </span><span class="s1">patchsysdict</span><span class="s3">[</span><span class="s1">fd</span><span class="s3">]</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_old</span><span class="s3">: </span><span class="s1">TextIO </span><span class="s3">= </span><span class="s1">getattr</span><span class="s3">(</span><span class="s1">sys</span><span class="s3">, </span><span class="s1">name</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">name </span><span class="s3">= </span><span class="s1">name</span>
+        <span class="s2">if </span><span class="s1">tmpfile </span><span class="s2">is None</span><span class="s3">:</span>
+            <span class="s2">if </span><span class="s1">name </span><span class="s3">== </span><span class="s4">&quot;stdin&quot;</span><span class="s3">:</span>
+                <span class="s1">tmpfile </span><span class="s3">= </span><span class="s1">DontReadFromInput</span><span class="s3">()</span>
+            <span class="s2">else</span><span class="s3">:</span>
+                <span class="s1">tmpfile </span><span class="s3">= </span><span class="s1">CaptureIO</span><span class="s3">() </span><span class="s2">if not </span><span class="s1">tee </span><span class="s2">else </span><span class="s1">TeeCaptureIO</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">_old</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile </span><span class="s3">= </span><span class="s1">tmpfile</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">= </span><span class="s4">&quot;initialized&quot;</span>
+
+    <span class="s2">def </span><span class="s1">repr</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">class_name</span><span class="s3">: </span><span class="s1">str</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+        <span class="s2">return </span><span class="s4">&quot;&lt;{} {} _old={} _state={!r} tmpfile={!r}&gt;&quot;</span><span class="s3">.</span><span class="s1">format</span><span class="s3">(</span>
+            <span class="s1">class_name</span><span class="s3">,</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">name</span><span class="s3">,</span>
+            <span class="s1">hasattr</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s4">&quot;_old&quot;</span><span class="s3">) </span><span class="s2">and </span><span class="s1">repr</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">_old</span><span class="s3">) </span><span class="s2">or </span><span class="s4">&quot;&lt;UNSET&gt;&quot;</span><span class="s3">,</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_state</span><span class="s3">,</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">,</span>
+        <span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">__repr__</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+        <span class="s2">return </span><span class="s4">&quot;&lt;{} {} _old={} _state={!r} tmpfile={!r}&gt;&quot;</span><span class="s3">.</span><span class="s1">format</span><span class="s3">(</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">__class__</span><span class="s3">.</span><span class="s1">__name__</span><span class="s3">,</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">name</span><span class="s3">,</span>
+            <span class="s1">hasattr</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s4">&quot;_old&quot;</span><span class="s3">) </span><span class="s2">and </span><span class="s1">repr</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">_old</span><span class="s3">) </span><span class="s2">or </span><span class="s4">&quot;&lt;UNSET&gt;&quot;</span><span class="s3">,</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_state</span><span class="s3">,</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">,</span>
+        <span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">_assert_state</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">op</span><span class="s3">: </span><span class="s1">str</span><span class="s3">, </span><span class="s1">states</span><span class="s3">: </span><span class="s1">Tuple</span><span class="s3">[</span><span class="s1">str</span><span class="s3">, ...]) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">assert </span><span class="s3">(</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s2">in </span><span class="s1">states</span>
+        <span class="s3">), </span><span class="s4">&quot;cannot {} in state {!r}: expected one of {}&quot;</span><span class="s3">.</span><span class="s1">format</span><span class="s3">(</span>
+            <span class="s1">op</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_state</span><span class="s3">, </span><span class="s4">&quot;, &quot;</span><span class="s3">.</span><span class="s1">join</span><span class="s3">(</span><span class="s1">states</span><span class="s3">)</span>
+        <span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">start</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_assert_state</span><span class="s3">(</span><span class="s4">&quot;start&quot;</span><span class="s3">, (</span><span class="s4">&quot;initialized&quot;</span><span class="s3">,))</span>
+        <span class="s1">setattr</span><span class="s3">(</span><span class="s1">sys</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">name</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">= </span><span class="s4">&quot;started&quot;</span>
+
+    <span class="s2">def </span><span class="s1">done</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_assert_state</span><span class="s3">(</span><span class="s4">&quot;done&quot;</span><span class="s3">, (</span><span class="s4">&quot;initialized&quot;</span><span class="s3">, </span><span class="s4">&quot;started&quot;</span><span class="s3">, </span><span class="s4">&quot;suspended&quot;</span><span class="s3">, </span><span class="s4">&quot;done&quot;</span><span class="s3">))</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">== </span><span class="s4">&quot;done&quot;</span><span class="s3">:</span>
+            <span class="s2">return</span>
+        <span class="s1">setattr</span><span class="s3">(</span><span class="s1">sys</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">name</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_old</span><span class="s3">)</span>
+        <span class="s2">del </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_old</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">close</span><span class="s3">()</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">= </span><span class="s4">&quot;done&quot;</span>
+
+    <span class="s2">def </span><span class="s1">suspend</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_assert_state</span><span class="s3">(</span><span class="s4">&quot;suspend&quot;</span><span class="s3">, (</span><span class="s4">&quot;started&quot;</span><span class="s3">, </span><span class="s4">&quot;suspended&quot;</span><span class="s3">))</span>
+        <span class="s1">setattr</span><span class="s3">(</span><span class="s1">sys</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">name</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_old</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">= </span><span class="s4">&quot;suspended&quot;</span>
+
+    <span class="s2">def </span><span class="s1">resume</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_assert_state</span><span class="s3">(</span><span class="s4">&quot;resume&quot;</span><span class="s3">, (</span><span class="s4">&quot;started&quot;</span><span class="s3">, </span><span class="s4">&quot;suspended&quot;</span><span class="s3">))</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">== </span><span class="s4">&quot;started&quot;</span><span class="s3">:</span>
+            <span class="s2">return</span>
+        <span class="s1">setattr</span><span class="s3">(</span><span class="s1">sys</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">name</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">= </span><span class="s4">&quot;started&quot;</span>
+
+
+<span class="s2">class </span><span class="s1">SysCaptureBinary</span><span class="s3">(</span><span class="s1">SysCaptureBase</span><span class="s3">[</span><span class="s1">bytes</span><span class="s3">]):</span>
+    <span class="s1">EMPTY_BUFFER </span><span class="s3">= </span><span class="s7">b&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">snap</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; bytes</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_assert_state</span><span class="s3">(</span><span class="s4">&quot;snap&quot;</span><span class="s3">, (</span><span class="s4">&quot;started&quot;</span><span class="s3">, </span><span class="s4">&quot;suspended&quot;</span><span class="s3">))</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">seek</span><span class="s3">(</span><span class="s6">0</span><span class="s3">)</span>
+        <span class="s1">res </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">buffer</span><span class="s3">.</span><span class="s1">read</span><span class="s3">()</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">seek</span><span class="s3">(</span><span class="s6">0</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">truncate</span><span class="s3">()</span>
+        <span class="s2">return </span><span class="s1">res</span>
+
+    <span class="s2">def </span><span class="s1">writeorg</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">data</span><span class="s3">: </span><span class="s1">bytes</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_assert_state</span><span class="s3">(</span><span class="s4">&quot;writeorg&quot;</span><span class="s3">, (</span><span class="s4">&quot;started&quot;</span><span class="s3">, </span><span class="s4">&quot;suspended&quot;</span><span class="s3">))</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_old</span><span class="s3">.</span><span class="s1">flush</span><span class="s3">()</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_old</span><span class="s3">.</span><span class="s1">buffer</span><span class="s3">.</span><span class="s1">write</span><span class="s3">(</span><span class="s1">data</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_old</span><span class="s3">.</span><span class="s1">buffer</span><span class="s3">.</span><span class="s1">flush</span><span class="s3">()</span>
+
+
+<span class="s2">class </span><span class="s1">SysCapture</span><span class="s3">(</span><span class="s1">SysCaptureBase</span><span class="s3">[</span><span class="s1">str</span><span class="s3">]):</span>
+    <span class="s1">EMPTY_BUFFER </span><span class="s3">= </span><span class="s4">&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">snap</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_assert_state</span><span class="s3">(</span><span class="s4">&quot;snap&quot;</span><span class="s3">, (</span><span class="s4">&quot;started&quot;</span><span class="s3">, </span><span class="s4">&quot;suspended&quot;</span><span class="s3">))</span>
+        <span class="s2">assert </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">, </span><span class="s1">CaptureIO</span><span class="s3">)</span>
+        <span class="s1">res </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">getvalue</span><span class="s3">()</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">seek</span><span class="s3">(</span><span class="s6">0</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">truncate</span><span class="s3">()</span>
+        <span class="s2">return </span><span class="s1">res</span>
+
+    <span class="s2">def </span><span class="s1">writeorg</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">data</span><span class="s3">: </span><span class="s1">str</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_assert_state</span><span class="s3">(</span><span class="s4">&quot;writeorg&quot;</span><span class="s3">, (</span><span class="s4">&quot;started&quot;</span><span class="s3">, </span><span class="s4">&quot;suspended&quot;</span><span class="s3">))</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_old</span><span class="s3">.</span><span class="s1">write</span><span class="s3">(</span><span class="s1">data</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_old</span><span class="s3">.</span><span class="s1">flush</span><span class="s3">()</span>
+
+
+<span class="s2">class </span><span class="s1">FDCaptureBase</span><span class="s3">(</span><span class="s1">CaptureBase</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">]):</span>
+    <span class="s2">def </span><span class="s1">__init__</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">targetfd</span><span class="s3">: </span><span class="s1">int</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd </span><span class="s3">= </span><span class="s1">targetfd</span>
+
+        <span class="s2">try</span><span class="s3">:</span>
+            <span class="s1">os</span><span class="s3">.</span><span class="s1">fstat</span><span class="s3">(</span><span class="s1">targetfd</span><span class="s3">)</span>
+        <span class="s2">except </span><span class="s1">OSError</span><span class="s3">:</span>
+            <span class="s5"># FD capturing is conceptually simple -- create a temporary file,</span>
+            <span class="s5"># redirect the FD to it, redirect back when done. But when the</span>
+            <span class="s5"># target FD is invalid it throws a wrench into this lovely scheme.</span>
+            <span class="s5">#</span>
+            <span class="s5"># Tests themselves shouldn't care if the FD is valid, FD capturing</span>
+            <span class="s5"># should work regardless of external circumstances. So falling back</span>
+            <span class="s5"># to just sys capturing is not a good option.</span>
+            <span class="s5">#</span>
+            <span class="s5"># Further complications are the need to support suspend() and the</span>
+            <span class="s5"># possibility of FD reuse (e.g. the tmpfile getting the very same</span>
+            <span class="s5"># target FD). The following approach is robust, I believe.</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd_invalid</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">int</span><span class="s3">] = </span><span class="s1">os</span><span class="s3">.</span><span class="s1">open</span><span class="s3">(</span><span class="s1">os</span><span class="s3">.</span><span class="s1">devnull</span><span class="s3">, </span><span class="s1">os</span><span class="s3">.</span><span class="s1">O_RDWR</span><span class="s3">)</span>
+            <span class="s1">os</span><span class="s3">.</span><span class="s1">dup2</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd_invalid</span><span class="s3">, </span><span class="s1">targetfd</span><span class="s3">)</span>
+        <span class="s2">else</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd_invalid </span><span class="s3">= </span><span class="s2">None</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd_save </span><span class="s3">= </span><span class="s1">os</span><span class="s3">.</span><span class="s1">dup</span><span class="s3">(</span><span class="s1">targetfd</span><span class="s3">)</span>
+
+        <span class="s2">if </span><span class="s1">targetfd </span><span class="s3">== </span><span class="s6">0</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile </span><span class="s3">= </span><span class="s1">open</span><span class="s3">(</span><span class="s1">os</span><span class="s3">.</span><span class="s1">devnull</span><span class="s3">, </span><span class="s1">encoding</span><span class="s3">=</span><span class="s4">&quot;utf-8&quot;</span><span class="s3">)</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">syscapture</span><span class="s3">: </span><span class="s1">CaptureBase</span><span class="s3">[</span><span class="s1">str</span><span class="s3">] = </span><span class="s1">SysCapture</span><span class="s3">(</span><span class="s1">targetfd</span><span class="s3">)</span>
+        <span class="s2">else</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile </span><span class="s3">= </span><span class="s1">EncodedFile</span><span class="s3">(</span>
+                <span class="s1">TemporaryFile</span><span class="s3">(</span><span class="s1">buffering</span><span class="s3">=</span><span class="s6">0</span><span class="s3">),</span>
+                <span class="s1">encoding</span><span class="s3">=</span><span class="s4">&quot;utf-8&quot;</span><span class="s3">,</span>
+                <span class="s1">errors</span><span class="s3">=</span><span class="s4">&quot;replace&quot;</span><span class="s3">,</span>
+                <span class="s1">newline</span><span class="s3">=</span><span class="s4">&quot;&quot;</span><span class="s3">,</span>
+                <span class="s1">write_through</span><span class="s3">=</span><span class="s2">True</span><span class="s3">,</span>
+            <span class="s3">)</span>
+            <span class="s2">if </span><span class="s1">targetfd </span><span class="s2">in </span><span class="s1">patchsysdict</span><span class="s3">:</span>
+                <span class="s1">self</span><span class="s3">.</span><span class="s1">syscapture </span><span class="s3">= </span><span class="s1">SysCapture</span><span class="s3">(</span><span class="s1">targetfd</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">)</span>
+            <span class="s2">else</span><span class="s3">:</span>
+                <span class="s1">self</span><span class="s3">.</span><span class="s1">syscapture </span><span class="s3">= </span><span class="s1">NoCapture</span><span class="s3">(</span><span class="s1">targetfd</span><span class="s3">)</span>
+
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">= </span><span class="s4">&quot;initialized&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__repr__</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+        <span class="s2">return </span><span class="s4">&quot;&lt;{} {} oldfd={} _state={!r} tmpfile={!r}&gt;&quot;</span><span class="s3">.</span><span class="s1">format</span><span class="s3">(</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">__class__</span><span class="s3">.</span><span class="s1">__name__</span><span class="s3">,</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd</span><span class="s3">,</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd_save</span><span class="s3">,</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_state</span><span class="s3">,</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">,</span>
+        <span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">_assert_state</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">op</span><span class="s3">: </span><span class="s1">str</span><span class="s3">, </span><span class="s1">states</span><span class="s3">: </span><span class="s1">Tuple</span><span class="s3">[</span><span class="s1">str</span><span class="s3">, ...]) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">assert </span><span class="s3">(</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s2">in </span><span class="s1">states</span>
+        <span class="s3">), </span><span class="s4">&quot;cannot {} in state {!r}: expected one of {}&quot;</span><span class="s3">.</span><span class="s1">format</span><span class="s3">(</span>
+            <span class="s1">op</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_state</span><span class="s3">, </span><span class="s4">&quot;, &quot;</span><span class="s3">.</span><span class="s1">join</span><span class="s3">(</span><span class="s1">states</span><span class="s3">)</span>
+        <span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">start</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Start capturing on targetfd using memorized tmpfile.&quot;&quot;&quot;</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_assert_state</span><span class="s3">(</span><span class="s4">&quot;start&quot;</span><span class="s3">, (</span><span class="s4">&quot;initialized&quot;</span><span class="s3">,))</span>
+        <span class="s1">os</span><span class="s3">.</span><span class="s1">dup2</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">fileno</span><span class="s3">(), </span><span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">syscapture</span><span class="s3">.</span><span class="s1">start</span><span class="s3">()</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">= </span><span class="s4">&quot;started&quot;</span>
+
+    <span class="s2">def </span><span class="s1">done</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Stop capturing, restore streams, return original capture file, 
+        seeked to position zero.&quot;&quot;&quot;</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_assert_state</span><span class="s3">(</span><span class="s4">&quot;done&quot;</span><span class="s3">, (</span><span class="s4">&quot;initialized&quot;</span><span class="s3">, </span><span class="s4">&quot;started&quot;</span><span class="s3">, </span><span class="s4">&quot;suspended&quot;</span><span class="s3">, </span><span class="s4">&quot;done&quot;</span><span class="s3">))</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">== </span><span class="s4">&quot;done&quot;</span><span class="s3">:</span>
+            <span class="s2">return</span>
+        <span class="s1">os</span><span class="s3">.</span><span class="s1">dup2</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd_save</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd</span><span class="s3">)</span>
+        <span class="s1">os</span><span class="s3">.</span><span class="s1">close</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd_save</span><span class="s3">)</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd_invalid </span><span class="s2">is not None</span><span class="s3">:</span>
+            <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd_invalid </span><span class="s3">!= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd</span><span class="s3">:</span>
+                <span class="s1">os</span><span class="s3">.</span><span class="s1">close</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd</span><span class="s3">)</span>
+            <span class="s1">os</span><span class="s3">.</span><span class="s1">close</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd_invalid</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">syscapture</span><span class="s3">.</span><span class="s1">done</span><span class="s3">()</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">close</span><span class="s3">()</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">= </span><span class="s4">&quot;done&quot;</span>
+
+    <span class="s2">def </span><span class="s1">suspend</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_assert_state</span><span class="s3">(</span><span class="s4">&quot;suspend&quot;</span><span class="s3">, (</span><span class="s4">&quot;started&quot;</span><span class="s3">, </span><span class="s4">&quot;suspended&quot;</span><span class="s3">))</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">== </span><span class="s4">&quot;suspended&quot;</span><span class="s3">:</span>
+            <span class="s2">return</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">syscapture</span><span class="s3">.</span><span class="s1">suspend</span><span class="s3">()</span>
+        <span class="s1">os</span><span class="s3">.</span><span class="s1">dup2</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd_save</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">= </span><span class="s4">&quot;suspended&quot;</span>
+
+    <span class="s2">def </span><span class="s1">resume</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_assert_state</span><span class="s3">(</span><span class="s4">&quot;resume&quot;</span><span class="s3">, (</span><span class="s4">&quot;started&quot;</span><span class="s3">, </span><span class="s4">&quot;suspended&quot;</span><span class="s3">))</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">== </span><span class="s4">&quot;started&quot;</span><span class="s3">:</span>
+            <span class="s2">return</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">syscapture</span><span class="s3">.</span><span class="s1">resume</span><span class="s3">()</span>
+        <span class="s1">os</span><span class="s3">.</span><span class="s1">dup2</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">fileno</span><span class="s3">(), </span><span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">= </span><span class="s4">&quot;started&quot;</span>
+
+
+<span class="s2">class </span><span class="s1">FDCaptureBinary</span><span class="s3">(</span><span class="s1">FDCaptureBase</span><span class="s3">[</span><span class="s1">bytes</span><span class="s3">]):</span>
+    <span class="s0">&quot;&quot;&quot;Capture IO to/from a given OS-level file descriptor. 
+ 
+    snap() produces `bytes`. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">EMPTY_BUFFER </span><span class="s3">= </span><span class="s7">b&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">snap</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; bytes</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_assert_state</span><span class="s3">(</span><span class="s4">&quot;snap&quot;</span><span class="s3">, (</span><span class="s4">&quot;started&quot;</span><span class="s3">, </span><span class="s4">&quot;suspended&quot;</span><span class="s3">))</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">seek</span><span class="s3">(</span><span class="s6">0</span><span class="s3">)</span>
+        <span class="s1">res </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">buffer</span><span class="s3">.</span><span class="s1">read</span><span class="s3">()</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">seek</span><span class="s3">(</span><span class="s6">0</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">truncate</span><span class="s3">()</span>
+        <span class="s2">return </span><span class="s1">res</span>
+
+    <span class="s2">def </span><span class="s1">writeorg</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">data</span><span class="s3">: </span><span class="s1">bytes</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Write to original file descriptor.&quot;&quot;&quot;</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_assert_state</span><span class="s3">(</span><span class="s4">&quot;writeorg&quot;</span><span class="s3">, (</span><span class="s4">&quot;started&quot;</span><span class="s3">, </span><span class="s4">&quot;suspended&quot;</span><span class="s3">))</span>
+        <span class="s1">os</span><span class="s3">.</span><span class="s1">write</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd_save</span><span class="s3">, </span><span class="s1">data</span><span class="s3">)</span>
+
+
+<span class="s2">class </span><span class="s1">FDCapture</span><span class="s3">(</span><span class="s1">FDCaptureBase</span><span class="s3">[</span><span class="s1">str</span><span class="s3">]):</span>
+    <span class="s0">&quot;&quot;&quot;Capture IO to/from a given OS-level file descriptor. 
+ 
+    snap() produces text. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">EMPTY_BUFFER </span><span class="s3">= </span><span class="s4">&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">snap</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_assert_state</span><span class="s3">(</span><span class="s4">&quot;snap&quot;</span><span class="s3">, (</span><span class="s4">&quot;started&quot;</span><span class="s3">, </span><span class="s4">&quot;suspended&quot;</span><span class="s3">))</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">seek</span><span class="s3">(</span><span class="s6">0</span><span class="s3">)</span>
+        <span class="s1">res </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">read</span><span class="s3">()</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">seek</span><span class="s3">(</span><span class="s6">0</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">tmpfile</span><span class="s3">.</span><span class="s1">truncate</span><span class="s3">()</span>
+        <span class="s2">return </span><span class="s1">res</span>
+
+    <span class="s2">def </span><span class="s1">writeorg</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">data</span><span class="s3">: </span><span class="s1">str</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Write to original file descriptor.&quot;&quot;&quot;</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_assert_state</span><span class="s3">(</span><span class="s4">&quot;writeorg&quot;</span><span class="s3">, (</span><span class="s4">&quot;started&quot;</span><span class="s3">, </span><span class="s4">&quot;suspended&quot;</span><span class="s3">))</span>
+        <span class="s5"># XXX use encoding of original stream</span>
+        <span class="s1">os</span><span class="s3">.</span><span class="s1">write</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">targetfd_save</span><span class="s3">, </span><span class="s1">data</span><span class="s3">.</span><span class="s1">encode</span><span class="s3">(</span><span class="s4">&quot;utf-8&quot;</span><span class="s3">))</span>
+
+
+<span class="s5"># MultiCapture</span>
+
+
+<span class="s5"># Generic NamedTuple only supported since Python 3.11.</span>
+<span class="s2">if </span><span class="s1">sys</span><span class="s3">.</span><span class="s1">version_info </span><span class="s3">&gt;= (</span><span class="s6">3</span><span class="s3">, </span><span class="s6">11</span><span class="s3">) </span><span class="s2">or </span><span class="s1">TYPE_CHECKING</span><span class="s3">:</span>
+
+    <span class="s3">@</span><span class="s1">final</span>
+    <span class="s2">class </span><span class="s1">CaptureResult</span><span class="s3">(</span><span class="s1">NamedTuple</span><span class="s3">, </span><span class="s1">Generic</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">]):</span>
+        <span class="s0">&quot;&quot;&quot;The result of :method:`CaptureFixture.readouterr`.&quot;&quot;&quot;</span>
+
+        <span class="s1">out</span><span class="s3">: </span><span class="s1">AnyStr</span>
+        <span class="s1">err</span><span class="s3">: </span><span class="s1">AnyStr</span>
+
+<span class="s2">else</span><span class="s3">:</span>
+
+    <span class="s2">class </span><span class="s1">CaptureResult</span><span class="s3">(</span>
+        <span class="s1">collections</span><span class="s3">.</span><span class="s1">namedtuple</span><span class="s3">(</span><span class="s4">&quot;CaptureResult&quot;</span><span class="s3">, [</span><span class="s4">&quot;out&quot;</span><span class="s3">, </span><span class="s4">&quot;err&quot;</span><span class="s3">]), </span><span class="s1">Generic</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">]</span>
+    <span class="s3">):</span>
+        <span class="s0">&quot;&quot;&quot;The result of :method:`CaptureFixture.readouterr`.&quot;&quot;&quot;</span>
+
+        <span class="s1">__slots__ </span><span class="s3">= ()</span>
+
+
+<span class="s2">class </span><span class="s1">MultiCapture</span><span class="s3">(</span><span class="s1">Generic</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">]):</span>
+    <span class="s1">_state </span><span class="s3">= </span><span class="s2">None</span>
+    <span class="s1">_in_suspended </span><span class="s3">= </span><span class="s2">False</span>
+
+    <span class="s2">def </span><span class="s1">__init__</span><span class="s3">(</span>
+        <span class="s1">self</span><span class="s3">,</span>
+        <span class="s1">in_</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">CaptureBase</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">]],</span>
+        <span class="s1">out</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">CaptureBase</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">]],</span>
+        <span class="s1">err</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">CaptureBase</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">]],</span>
+    <span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">in_</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">CaptureBase</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">]] = </span><span class="s1">in_</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">out</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">CaptureBase</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">]] = </span><span class="s1">out</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">err</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">CaptureBase</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">]] = </span><span class="s1">err</span>
+
+    <span class="s2">def </span><span class="s1">__repr__</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+        <span class="s2">return </span><span class="s4">&quot;&lt;MultiCapture out={!r} err={!r} in_={!r} _state={!r} _in_suspended={!r}&gt;&quot;</span><span class="s3">.</span><span class="s1">format</span><span class="s3">(</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">out</span><span class="s3">,</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">err</span><span class="s3">,</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">in_</span><span class="s3">,</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_state</span><span class="s3">,</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_in_suspended</span><span class="s3">,</span>
+        <span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">start_capturing</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">= </span><span class="s4">&quot;started&quot;</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">in_</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">in_</span><span class="s3">.</span><span class="s1">start</span><span class="s3">()</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">out</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">out</span><span class="s3">.</span><span class="s1">start</span><span class="s3">()</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">err</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">err</span><span class="s3">.</span><span class="s1">start</span><span class="s3">()</span>
+
+    <span class="s2">def </span><span class="s1">pop_outerr_to_orig</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; Tuple</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">, </span><span class="s1">AnyStr</span><span class="s3">]:</span>
+        <span class="s0">&quot;&quot;&quot;Pop current snapshot out/err capture and flush to orig streams.&quot;&quot;&quot;</span>
+        <span class="s1">out</span><span class="s3">, </span><span class="s1">err </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">readouterr</span><span class="s3">()</span>
+        <span class="s2">if </span><span class="s1">out</span><span class="s3">:</span>
+            <span class="s2">assert </span><span class="s1">self</span><span class="s3">.</span><span class="s1">out </span><span class="s2">is not None</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">out</span><span class="s3">.</span><span class="s1">writeorg</span><span class="s3">(</span><span class="s1">out</span><span class="s3">)</span>
+        <span class="s2">if </span><span class="s1">err</span><span class="s3">:</span>
+            <span class="s2">assert </span><span class="s1">self</span><span class="s3">.</span><span class="s1">err </span><span class="s2">is not None</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">err</span><span class="s3">.</span><span class="s1">writeorg</span><span class="s3">(</span><span class="s1">err</span><span class="s3">)</span>
+        <span class="s2">return </span><span class="s1">out</span><span class="s3">, </span><span class="s1">err</span>
+
+    <span class="s2">def </span><span class="s1">suspend_capturing</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">in_</span><span class="s3">: </span><span class="s1">bool </span><span class="s3">= </span><span class="s2">False</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">= </span><span class="s4">&quot;suspended&quot;</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">out</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">out</span><span class="s3">.</span><span class="s1">suspend</span><span class="s3">()</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">err</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">err</span><span class="s3">.</span><span class="s1">suspend</span><span class="s3">()</span>
+        <span class="s2">if </span><span class="s1">in_ </span><span class="s2">and </span><span class="s1">self</span><span class="s3">.</span><span class="s1">in_</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">in_</span><span class="s3">.</span><span class="s1">suspend</span><span class="s3">()</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_in_suspended </span><span class="s3">= </span><span class="s2">True</span>
+
+    <span class="s2">def </span><span class="s1">resume_capturing</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">= </span><span class="s4">&quot;started&quot;</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">out</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">out</span><span class="s3">.</span><span class="s1">resume</span><span class="s3">()</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">err</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">err</span><span class="s3">.</span><span class="s1">resume</span><span class="s3">()</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_in_suspended</span><span class="s3">:</span>
+            <span class="s2">assert </span><span class="s1">self</span><span class="s3">.</span><span class="s1">in_ </span><span class="s2">is not None</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">in_</span><span class="s3">.</span><span class="s1">resume</span><span class="s3">()</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_in_suspended </span><span class="s3">= </span><span class="s2">False</span>
+
+    <span class="s2">def </span><span class="s1">stop_capturing</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Stop capturing and reset capturing streams.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">== </span><span class="s4">&quot;stopped&quot;</span><span class="s3">:</span>
+            <span class="s2">raise </span><span class="s1">ValueError</span><span class="s3">(</span><span class="s4">&quot;was already stopped&quot;</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">= </span><span class="s4">&quot;stopped&quot;</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">out</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">out</span><span class="s3">.</span><span class="s1">done</span><span class="s3">()</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">err</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">err</span><span class="s3">.</span><span class="s1">done</span><span class="s3">()</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">in_</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">in_</span><span class="s3">.</span><span class="s1">done</span><span class="s3">()</span>
+
+    <span class="s2">def </span><span class="s1">is_started</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; bool</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Whether actively capturing -- not suspended or stopped.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_state </span><span class="s3">== </span><span class="s4">&quot;started&quot;</span>
+
+    <span class="s2">def </span><span class="s1">readouterr</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; CaptureResult</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">]:</span>
+        <span class="s1">out </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">out</span><span class="s3">.</span><span class="s1">snap</span><span class="s3">() </span><span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">out </span><span class="s2">else </span><span class="s4">&quot;&quot;</span>
+        <span class="s1">err </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">err</span><span class="s3">.</span><span class="s1">snap</span><span class="s3">() </span><span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">err </span><span class="s2">else </span><span class="s4">&quot;&quot;</span>
+        <span class="s5"># TODO: This type error is real, need to fix.</span>
+        <span class="s2">return </span><span class="s1">CaptureResult</span><span class="s3">(</span><span class="s1">out</span><span class="s3">, </span><span class="s1">err</span><span class="s3">)  </span><span class="s5"># type: ignore[arg-type]</span>
+
+
+<span class="s2">def </span><span class="s1">_get_multicapture</span><span class="s3">(</span><span class="s1">method</span><span class="s3">: </span><span class="s4">&quot;_CaptureMethod&quot;</span><span class="s3">) </span><span class="s1">-&gt; MultiCapture</span><span class="s3">[</span><span class="s1">str</span><span class="s3">]:</span>
+    <span class="s2">if </span><span class="s1">method </span><span class="s3">== </span><span class="s4">&quot;fd&quot;</span><span class="s3">:</span>
+        <span class="s2">return </span><span class="s1">MultiCapture</span><span class="s3">(</span><span class="s1">in_</span><span class="s3">=</span><span class="s1">FDCapture</span><span class="s3">(</span><span class="s6">0</span><span class="s3">), </span><span class="s1">out</span><span class="s3">=</span><span class="s1">FDCapture</span><span class="s3">(</span><span class="s6">1</span><span class="s3">), </span><span class="s1">err</span><span class="s3">=</span><span class="s1">FDCapture</span><span class="s3">(</span><span class="s6">2</span><span class="s3">))</span>
+    <span class="s2">elif </span><span class="s1">method </span><span class="s3">== </span><span class="s4">&quot;sys&quot;</span><span class="s3">:</span>
+        <span class="s2">return </span><span class="s1">MultiCapture</span><span class="s3">(</span><span class="s1">in_</span><span class="s3">=</span><span class="s1">SysCapture</span><span class="s3">(</span><span class="s6">0</span><span class="s3">), </span><span class="s1">out</span><span class="s3">=</span><span class="s1">SysCapture</span><span class="s3">(</span><span class="s6">1</span><span class="s3">), </span><span class="s1">err</span><span class="s3">=</span><span class="s1">SysCapture</span><span class="s3">(</span><span class="s6">2</span><span class="s3">))</span>
+    <span class="s2">elif </span><span class="s1">method </span><span class="s3">== </span><span class="s4">&quot;no&quot;</span><span class="s3">:</span>
+        <span class="s2">return </span><span class="s1">MultiCapture</span><span class="s3">(</span><span class="s1">in_</span><span class="s3">=</span><span class="s2">None</span><span class="s3">, </span><span class="s1">out</span><span class="s3">=</span><span class="s2">None</span><span class="s3">, </span><span class="s1">err</span><span class="s3">=</span><span class="s2">None</span><span class="s3">)</span>
+    <span class="s2">elif </span><span class="s1">method </span><span class="s3">== </span><span class="s4">&quot;tee-sys&quot;</span><span class="s3">:</span>
+        <span class="s2">return </span><span class="s1">MultiCapture</span><span class="s3">(</span>
+            <span class="s1">in_</span><span class="s3">=</span><span class="s2">None</span><span class="s3">, </span><span class="s1">out</span><span class="s3">=</span><span class="s1">SysCapture</span><span class="s3">(</span><span class="s6">1</span><span class="s3">, </span><span class="s1">tee</span><span class="s3">=</span><span class="s2">True</span><span class="s3">), </span><span class="s1">err</span><span class="s3">=</span><span class="s1">SysCapture</span><span class="s3">(</span><span class="s6">2</span><span class="s3">, </span><span class="s1">tee</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+        <span class="s3">)</span>
+    <span class="s2">raise </span><span class="s1">ValueError</span><span class="s3">(</span><span class="s4">f&quot;unknown capturing method: </span><span class="s2">{</span><span class="s1">method</span><span class="s2">!r}</span><span class="s4">&quot;</span><span class="s3">)</span>
+
+
+<span class="s5"># CaptureManager and CaptureFixture</span>
+
+
+<span class="s2">class </span><span class="s1">CaptureManager</span><span class="s3">:</span>
+    <span class="s0">&quot;&quot;&quot;The capture plugin. 
+ 
+    Manages that the appropriate capture method is enabled/disabled during 
+    collection and each test phase (setup, call, teardown). After each of 
+    those points, the captured output is obtained and attached to the 
+    collection/runtest report. 
+ 
+    There are two levels of capture: 
+ 
+    * global: enabled by default and can be suppressed by the ``-s`` 
+      option. This is always enabled/disabled during collection and each test 
+      phase. 
+ 
+    * fixture: when a test function or one of its fixture depend on the 
+      ``capsys`` or ``capfd`` fixtures. In this case special handling is 
+      needed to ensure the fixtures take precedence over the global capture. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">method</span><span class="s3">: </span><span class="s4">&quot;_CaptureMethod&quot;</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_method</span><span class="s3">: </span><span class="s1">Final </span><span class="s3">= </span><span class="s1">method</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_global_capturing</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">MultiCapture</span><span class="s3">[</span><span class="s1">str</span><span class="s3">]] = </span><span class="s2">None</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_capture_fixture</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">CaptureFixture</span><span class="s3">[</span><span class="s1">Any</span><span class="s3">]] = </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">__repr__</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; str</span><span class="s3">:</span>
+        <span class="s2">return </span><span class="s4">&quot;&lt;CaptureManager _method={!r} _global_capturing={!r} _capture_fixture={!r}&gt;&quot;</span><span class="s3">.</span><span class="s1">format</span><span class="s3">(</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_method</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_global_capturing</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture_fixture</span>
+        <span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">is_capturing</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; Union</span><span class="s3">[</span><span class="s1">str</span><span class="s3">, </span><span class="s1">bool</span><span class="s3">]:</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">is_globally_capturing</span><span class="s3">():</span>
+            <span class="s2">return </span><span class="s4">&quot;global&quot;</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture_fixture</span><span class="s3">:</span>
+            <span class="s2">return </span><span class="s4">&quot;fixture %s&quot; </span><span class="s3">% </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture_fixture</span><span class="s3">.</span><span class="s1">request</span><span class="s3">.</span><span class="s1">fixturename</span>
+        <span class="s2">return False</span>
+
+    <span class="s5"># Global capturing control</span>
+
+    <span class="s2">def </span><span class="s1">is_globally_capturing</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; bool</span><span class="s3">:</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_method </span><span class="s3">!= </span><span class="s4">&quot;no&quot;</span>
+
+    <span class="s2">def </span><span class="s1">start_global_capturing</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">assert </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_global_capturing </span><span class="s2">is None</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_global_capturing </span><span class="s3">= </span><span class="s1">_get_multicapture</span><span class="s3">(</span><span class="s1">self</span><span class="s3">.</span><span class="s1">_method</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_global_capturing</span><span class="s3">.</span><span class="s1">start_capturing</span><span class="s3">()</span>
+
+    <span class="s2">def </span><span class="s1">stop_global_capturing</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_global_capturing </span><span class="s2">is not None</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_global_capturing</span><span class="s3">.</span><span class="s1">pop_outerr_to_orig</span><span class="s3">()</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_global_capturing</span><span class="s3">.</span><span class="s1">stop_capturing</span><span class="s3">()</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_global_capturing </span><span class="s3">= </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">resume_global_capture</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s5"># During teardown of the python process, and on rare occasions, capture</span>
+        <span class="s5"># attributes can be `None` while trying to resume global capture.</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_global_capturing </span><span class="s2">is not None</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_global_capturing</span><span class="s3">.</span><span class="s1">resume_capturing</span><span class="s3">()</span>
+
+    <span class="s2">def </span><span class="s1">suspend_global_capture</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">in_</span><span class="s3">: </span><span class="s1">bool </span><span class="s3">= </span><span class="s2">False</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_global_capturing </span><span class="s2">is not None</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_global_capturing</span><span class="s3">.</span><span class="s1">suspend_capturing</span><span class="s3">(</span><span class="s1">in_</span><span class="s3">=</span><span class="s1">in_</span><span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">suspend</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">in_</span><span class="s3">: </span><span class="s1">bool </span><span class="s3">= </span><span class="s2">False</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s5"># Need to undo local capsys-et-al if it exists before disabling global capture.</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">suspend_fixture</span><span class="s3">()</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">suspend_global_capture</span><span class="s3">(</span><span class="s1">in_</span><span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">resume</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">resume_global_capture</span><span class="s3">()</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">resume_fixture</span><span class="s3">()</span>
+
+    <span class="s2">def </span><span class="s1">read_global_capture</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; CaptureResult</span><span class="s3">[</span><span class="s1">str</span><span class="s3">]:</span>
+        <span class="s2">assert </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_global_capturing </span><span class="s2">is not None</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_global_capturing</span><span class="s3">.</span><span class="s1">readouterr</span><span class="s3">()</span>
+
+    <span class="s5"># Fixture Control</span>
+
+    <span class="s2">def </span><span class="s1">set_fixture</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">capture_fixture</span><span class="s3">: </span><span class="s4">&quot;CaptureFixture[Any]&quot;</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture_fixture</span><span class="s3">:</span>
+            <span class="s1">current_fixture </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture_fixture</span><span class="s3">.</span><span class="s1">request</span><span class="s3">.</span><span class="s1">fixturename</span>
+            <span class="s1">requested_fixture </span><span class="s3">= </span><span class="s1">capture_fixture</span><span class="s3">.</span><span class="s1">request</span><span class="s3">.</span><span class="s1">fixturename</span>
+            <span class="s1">capture_fixture</span><span class="s3">.</span><span class="s1">request</span><span class="s3">.</span><span class="s1">raiseerror</span><span class="s3">(</span>
+                <span class="s4">&quot;cannot use {} and {} at the same time&quot;</span><span class="s3">.</span><span class="s1">format</span><span class="s3">(</span>
+                    <span class="s1">requested_fixture</span><span class="s3">, </span><span class="s1">current_fixture</span>
+                <span class="s3">)</span>
+            <span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_capture_fixture </span><span class="s3">= </span><span class="s1">capture_fixture</span>
+
+    <span class="s2">def </span><span class="s1">unset_fixture</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_capture_fixture </span><span class="s3">= </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">activate_fixture</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;If the current item is using ``capsys`` or ``capfd``, activate 
+        them so they take precedence over the global capture.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture_fixture</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_capture_fixture</span><span class="s3">.</span><span class="s1">_start</span><span class="s3">()</span>
+
+    <span class="s2">def </span><span class="s1">deactivate_fixture</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Deactivate the ``capsys`` or ``capfd`` fixture of this item, if any.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture_fixture</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_capture_fixture</span><span class="s3">.</span><span class="s1">close</span><span class="s3">()</span>
+
+    <span class="s2">def </span><span class="s1">suspend_fixture</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture_fixture</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_capture_fixture</span><span class="s3">.</span><span class="s1">_suspend</span><span class="s3">()</span>
+
+    <span class="s2">def </span><span class="s1">resume_fixture</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture_fixture</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_capture_fixture</span><span class="s3">.</span><span class="s1">_resume</span><span class="s3">()</span>
+
+    <span class="s5"># Helper context managers</span>
+
+    <span class="s3">@</span><span class="s1">contextlib</span><span class="s3">.</span><span class="s1">contextmanager</span>
+    <span class="s2">def </span><span class="s1">global_and_fixture_disabled</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; Generator</span><span class="s3">[</span><span class="s2">None</span><span class="s3">, </span><span class="s2">None</span><span class="s3">, </span><span class="s2">None</span><span class="s3">]:</span>
+        <span class="s0">&quot;&quot;&quot;Context manager to temporarily disable global and current fixture capturing.&quot;&quot;&quot;</span>
+        <span class="s1">do_fixture </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture_fixture </span><span class="s2">and </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture_fixture</span><span class="s3">.</span><span class="s1">_is_started</span><span class="s3">()</span>
+        <span class="s2">if </span><span class="s1">do_fixture</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">suspend_fixture</span><span class="s3">()</span>
+        <span class="s1">do_global </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_global_capturing </span><span class="s2">and </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_global_capturing</span><span class="s3">.</span><span class="s1">is_started</span><span class="s3">()</span>
+        <span class="s2">if </span><span class="s1">do_global</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">suspend_global_capture</span><span class="s3">()</span>
+        <span class="s2">try</span><span class="s3">:</span>
+            <span class="s2">yield</span>
+        <span class="s2">finally</span><span class="s3">:</span>
+            <span class="s2">if </span><span class="s1">do_global</span><span class="s3">:</span>
+                <span class="s1">self</span><span class="s3">.</span><span class="s1">resume_global_capture</span><span class="s3">()</span>
+            <span class="s2">if </span><span class="s1">do_fixture</span><span class="s3">:</span>
+                <span class="s1">self</span><span class="s3">.</span><span class="s1">resume_fixture</span><span class="s3">()</span>
+
+    <span class="s3">@</span><span class="s1">contextlib</span><span class="s3">.</span><span class="s1">contextmanager</span>
+    <span class="s2">def </span><span class="s1">item_capture</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">when</span><span class="s3">: </span><span class="s1">str</span><span class="s3">, </span><span class="s1">item</span><span class="s3">: </span><span class="s1">Item</span><span class="s3">) </span><span class="s1">-&gt; Generator</span><span class="s3">[</span><span class="s2">None</span><span class="s3">, </span><span class="s2">None</span><span class="s3">, </span><span class="s2">None</span><span class="s3">]:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">resume_global_capture</span><span class="s3">()</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">activate_fixture</span><span class="s3">()</span>
+        <span class="s2">try</span><span class="s3">:</span>
+            <span class="s2">yield</span>
+        <span class="s2">finally</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">deactivate_fixture</span><span class="s3">()</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">suspend_global_capture</span><span class="s3">(</span><span class="s1">in_</span><span class="s3">=</span><span class="s2">False</span><span class="s3">)</span>
+
+        <span class="s1">out</span><span class="s3">, </span><span class="s1">err </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">read_global_capture</span><span class="s3">()</span>
+        <span class="s1">item</span><span class="s3">.</span><span class="s1">add_report_section</span><span class="s3">(</span><span class="s1">when</span><span class="s3">, </span><span class="s4">&quot;stdout&quot;</span><span class="s3">, </span><span class="s1">out</span><span class="s3">)</span>
+        <span class="s1">item</span><span class="s3">.</span><span class="s1">add_report_section</span><span class="s3">(</span><span class="s1">when</span><span class="s3">, </span><span class="s4">&quot;stderr&quot;</span><span class="s3">, </span><span class="s1">err</span><span class="s3">)</span>
+
+    <span class="s5"># Hooks</span>
+
+    <span class="s3">@</span><span class="s1">hookimpl</span><span class="s3">(</span><span class="s1">hookwrapper</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+    <span class="s2">def </span><span class="s1">pytest_make_collect_report</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">collector</span><span class="s3">: </span><span class="s1">Collector</span><span class="s3">):</span>
+        <span class="s2">if </span><span class="s1">isinstance</span><span class="s3">(</span><span class="s1">collector</span><span class="s3">, </span><span class="s1">File</span><span class="s3">):</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">resume_global_capture</span><span class="s3">()</span>
+            <span class="s1">outcome </span><span class="s3">= </span><span class="s2">yield</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">suspend_global_capture</span><span class="s3">()</span>
+            <span class="s1">out</span><span class="s3">, </span><span class="s1">err </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">read_global_capture</span><span class="s3">()</span>
+            <span class="s1">rep </span><span class="s3">= </span><span class="s1">outcome</span><span class="s3">.</span><span class="s1">get_result</span><span class="s3">()</span>
+            <span class="s2">if </span><span class="s1">out</span><span class="s3">:</span>
+                <span class="s1">rep</span><span class="s3">.</span><span class="s1">sections</span><span class="s3">.</span><span class="s1">append</span><span class="s3">((</span><span class="s4">&quot;Captured stdout&quot;</span><span class="s3">, </span><span class="s1">out</span><span class="s3">))</span>
+            <span class="s2">if </span><span class="s1">err</span><span class="s3">:</span>
+                <span class="s1">rep</span><span class="s3">.</span><span class="s1">sections</span><span class="s3">.</span><span class="s1">append</span><span class="s3">((</span><span class="s4">&quot;Captured stderr&quot;</span><span class="s3">, </span><span class="s1">err</span><span class="s3">))</span>
+        <span class="s2">else</span><span class="s3">:</span>
+            <span class="s2">yield</span>
+
+    <span class="s3">@</span><span class="s1">hookimpl</span><span class="s3">(</span><span class="s1">hookwrapper</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+    <span class="s2">def </span><span class="s1">pytest_runtest_setup</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">item</span><span class="s3">: </span><span class="s1">Item</span><span class="s3">) </span><span class="s1">-&gt; Generator</span><span class="s3">[</span><span class="s2">None</span><span class="s3">, </span><span class="s2">None</span><span class="s3">, </span><span class="s2">None</span><span class="s3">]:</span>
+        <span class="s2">with </span><span class="s1">self</span><span class="s3">.</span><span class="s1">item_capture</span><span class="s3">(</span><span class="s4">&quot;setup&quot;</span><span class="s3">, </span><span class="s1">item</span><span class="s3">):</span>
+            <span class="s2">yield</span>
+
+    <span class="s3">@</span><span class="s1">hookimpl</span><span class="s3">(</span><span class="s1">hookwrapper</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+    <span class="s2">def </span><span class="s1">pytest_runtest_call</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">item</span><span class="s3">: </span><span class="s1">Item</span><span class="s3">) </span><span class="s1">-&gt; Generator</span><span class="s3">[</span><span class="s2">None</span><span class="s3">, </span><span class="s2">None</span><span class="s3">, </span><span class="s2">None</span><span class="s3">]:</span>
+        <span class="s2">with </span><span class="s1">self</span><span class="s3">.</span><span class="s1">item_capture</span><span class="s3">(</span><span class="s4">&quot;call&quot;</span><span class="s3">, </span><span class="s1">item</span><span class="s3">):</span>
+            <span class="s2">yield</span>
+
+    <span class="s3">@</span><span class="s1">hookimpl</span><span class="s3">(</span><span class="s1">hookwrapper</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+    <span class="s2">def </span><span class="s1">pytest_runtest_teardown</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">item</span><span class="s3">: </span><span class="s1">Item</span><span class="s3">) </span><span class="s1">-&gt; Generator</span><span class="s3">[</span><span class="s2">None</span><span class="s3">, </span><span class="s2">None</span><span class="s3">, </span><span class="s2">None</span><span class="s3">]:</span>
+        <span class="s2">with </span><span class="s1">self</span><span class="s3">.</span><span class="s1">item_capture</span><span class="s3">(</span><span class="s4">&quot;teardown&quot;</span><span class="s3">, </span><span class="s1">item</span><span class="s3">):</span>
+            <span class="s2">yield</span>
+
+    <span class="s3">@</span><span class="s1">hookimpl</span><span class="s3">(</span><span class="s1">tryfirst</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+    <span class="s2">def </span><span class="s1">pytest_keyboard_interrupt</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">stop_global_capturing</span><span class="s3">()</span>
+
+    <span class="s3">@</span><span class="s1">hookimpl</span><span class="s3">(</span><span class="s1">tryfirst</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+    <span class="s2">def </span><span class="s1">pytest_internalerror</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">stop_global_capturing</span><span class="s3">()</span>
+
+
+<span class="s2">class </span><span class="s1">CaptureFixture</span><span class="s3">(</span><span class="s1">Generic</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">]):</span>
+    <span class="s0">&quot;&quot;&quot;Object returned by the :fixture:`capsys`, :fixture:`capsysbinary`, 
+    :fixture:`capfd` and :fixture:`capfdbinary` fixtures.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__</span><span class="s3">(</span>
+        <span class="s1">self</span><span class="s3">,</span>
+        <span class="s1">captureclass</span><span class="s3">: </span><span class="s1">Type</span><span class="s3">[</span><span class="s1">CaptureBase</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">]],</span>
+        <span class="s1">request</span><span class="s3">: </span><span class="s1">SubRequest</span><span class="s3">,</span>
+        <span class="s3">*,</span>
+        <span class="s1">_ispytest</span><span class="s3">: </span><span class="s1">bool </span><span class="s3">= </span><span class="s2">False</span><span class="s3">,</span>
+    <span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s1">check_ispytest</span><span class="s3">(</span><span class="s1">_ispytest</span><span class="s3">)</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">captureclass</span><span class="s3">: </span><span class="s1">Type</span><span class="s3">[</span><span class="s1">CaptureBase</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">]] = </span><span class="s1">captureclass</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">request </span><span class="s3">= </span><span class="s1">request</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_capture</span><span class="s3">: </span><span class="s1">Optional</span><span class="s3">[</span><span class="s1">MultiCapture</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">]] = </span><span class="s2">None</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_captured_out</span><span class="s3">: </span><span class="s1">AnyStr </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">captureclass</span><span class="s3">.</span><span class="s1">EMPTY_BUFFER</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_captured_err</span><span class="s3">: </span><span class="s1">AnyStr </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">captureclass</span><span class="s3">.</span><span class="s1">EMPTY_BUFFER</span>
+
+    <span class="s2">def </span><span class="s1">_start</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture </span><span class="s2">is None</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_capture </span><span class="s3">= </span><span class="s1">MultiCapture</span><span class="s3">(</span>
+                <span class="s1">in_</span><span class="s3">=</span><span class="s2">None</span><span class="s3">,</span>
+                <span class="s1">out</span><span class="s3">=</span><span class="s1">self</span><span class="s3">.</span><span class="s1">captureclass</span><span class="s3">(</span><span class="s6">1</span><span class="s3">),</span>
+                <span class="s1">err</span><span class="s3">=</span><span class="s1">self</span><span class="s3">.</span><span class="s1">captureclass</span><span class="s3">(</span><span class="s6">2</span><span class="s3">),</span>
+            <span class="s3">)</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_capture</span><span class="s3">.</span><span class="s1">start_capturing</span><span class="s3">()</span>
+
+    <span class="s2">def </span><span class="s1">close</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture </span><span class="s2">is not None</span><span class="s3">:</span>
+            <span class="s1">out</span><span class="s3">, </span><span class="s1">err </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture</span><span class="s3">.</span><span class="s1">pop_outerr_to_orig</span><span class="s3">()</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_captured_out </span><span class="s3">+= </span><span class="s1">out</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_captured_err </span><span class="s3">+= </span><span class="s1">err</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_capture</span><span class="s3">.</span><span class="s1">stop_capturing</span><span class="s3">()</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_capture </span><span class="s3">= </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">readouterr</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; CaptureResult</span><span class="s3">[</span><span class="s1">AnyStr</span><span class="s3">]:</span>
+        <span class="s0">&quot;&quot;&quot;Read and return the captured output so far, resetting the internal 
+        buffer. 
+ 
+        :returns: 
+            The captured content as a namedtuple with ``out`` and ``err`` 
+            string attributes. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">captured_out</span><span class="s3">, </span><span class="s1">captured_err </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_captured_out</span><span class="s3">, </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_captured_err</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture </span><span class="s2">is not None</span><span class="s3">:</span>
+            <span class="s1">out</span><span class="s3">, </span><span class="s1">err </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture</span><span class="s3">.</span><span class="s1">readouterr</span><span class="s3">()</span>
+            <span class="s1">captured_out </span><span class="s3">+= </span><span class="s1">out</span>
+            <span class="s1">captured_err </span><span class="s3">+= </span><span class="s1">err</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_captured_out </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">captureclass</span><span class="s3">.</span><span class="s1">EMPTY_BUFFER</span>
+        <span class="s1">self</span><span class="s3">.</span><span class="s1">_captured_err </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">captureclass</span><span class="s3">.</span><span class="s1">EMPTY_BUFFER</span>
+        <span class="s2">return </span><span class="s1">CaptureResult</span><span class="s3">(</span><span class="s1">captured_out</span><span class="s3">, </span><span class="s1">captured_err</span><span class="s3">)</span>
+
+    <span class="s2">def </span><span class="s1">_suspend</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Suspend this fixture's own capturing temporarily.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture </span><span class="s2">is not None</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_capture</span><span class="s3">.</span><span class="s1">suspend_capturing</span><span class="s3">()</span>
+
+    <span class="s2">def </span><span class="s1">_resume</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; </span><span class="s2">None</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Resume this fixture's own capturing temporarily.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture </span><span class="s2">is not None</span><span class="s3">:</span>
+            <span class="s1">self</span><span class="s3">.</span><span class="s1">_capture</span><span class="s3">.</span><span class="s1">resume_capturing</span><span class="s3">()</span>
+
+    <span class="s2">def </span><span class="s1">_is_started</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; bool</span><span class="s3">:</span>
+        <span class="s0">&quot;&quot;&quot;Whether actively capturing -- not disabled or closed.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture </span><span class="s2">is not None</span><span class="s3">:</span>
+            <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_capture</span><span class="s3">.</span><span class="s1">is_started</span><span class="s3">()</span>
+        <span class="s2">return False</span>
+
+    <span class="s3">@</span><span class="s1">contextlib</span><span class="s3">.</span><span class="s1">contextmanager</span>
+    <span class="s2">def </span><span class="s1">disabled</span><span class="s3">(</span><span class="s1">self</span><span class="s3">) </span><span class="s1">-&gt; Generator</span><span class="s3">[</span><span class="s2">None</span><span class="s3">, </span><span class="s2">None</span><span class="s3">, </span><span class="s2">None</span><span class="s3">]:</span>
+        <span class="s0">&quot;&quot;&quot;Temporarily disable capturing while inside the ``with`` block.&quot;&quot;&quot;</span>
+        <span class="s1">capmanager</span><span class="s3">: </span><span class="s1">CaptureManager </span><span class="s3">= </span><span class="s1">self</span><span class="s3">.</span><span class="s1">request</span><span class="s3">.</span><span class="s1">config</span><span class="s3">.</span><span class="s1">pluginmanager</span><span class="s3">.</span><span class="s1">getplugin</span><span class="s3">(</span>
+            <span class="s4">&quot;capturemanager&quot;</span>
+        <span class="s3">)</span>
+        <span class="s2">with </span><span class="s1">capmanager</span><span class="s3">.</span><span class="s1">global_and_fixture_disabled</span><span class="s3">():</span>
+            <span class="s2">yield</span>
+
+
+<span class="s5"># The fixtures.</span>
+
+
+<span class="s3">@</span><span class="s1">fixture</span>
+<span class="s2">def </span><span class="s1">capsys</span><span class="s3">(</span><span class="s1">request</span><span class="s3">: </span><span class="s1">SubRequest</span><span class="s3">) </span><span class="s1">-&gt; Generator</span><span class="s3">[</span><span class="s1">CaptureFixture</span><span class="s3">[</span><span class="s1">str</span><span class="s3">], </span><span class="s2">None</span><span class="s3">, </span><span class="s2">None</span><span class="s3">]:</span>
+    <span class="s0">r&quot;&quot;&quot;Enable text capturing of writes to ``sys.stdout`` and ``sys.stderr``. 
+ 
+    The captured output is made available via ``capsys.readouterr()`` method 
+    calls, which return a ``(out, err)`` namedtuple. 
+    ``out`` and ``err`` will be ``text`` objects. 
+ 
+    Returns an instance of :class:`CaptureFixture[str] &lt;pytest.CaptureFixture&gt;`. 
+ 
+    Example: 
+ 
+    .. code-block:: python 
+ 
+        def test_output(capsys): 
+            print(&quot;hello&quot;) 
+            captured = capsys.readouterr() 
+            assert captured.out == &quot;hello\n&quot; 
+    &quot;&quot;&quot;</span>
+    <span class="s1">capman</span><span class="s3">: </span><span class="s1">CaptureManager </span><span class="s3">= </span><span class="s1">request</span><span class="s3">.</span><span class="s1">config</span><span class="s3">.</span><span class="s1">pluginmanager</span><span class="s3">.</span><span class="s1">getplugin</span><span class="s3">(</span><span class="s4">&quot;capturemanager&quot;</span><span class="s3">)</span>
+    <span class="s1">capture_fixture </span><span class="s3">= </span><span class="s1">CaptureFixture</span><span class="s3">(</span><span class="s1">SysCapture</span><span class="s3">, </span><span class="s1">request</span><span class="s3">, </span><span class="s1">_ispytest</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+    <span class="s1">capman</span><span class="s3">.</span><span class="s1">set_fixture</span><span class="s3">(</span><span class="s1">capture_fixture</span><span class="s3">)</span>
+    <span class="s1">capture_fixture</span><span class="s3">.</span><span class="s1">_start</span><span class="s3">()</span>
+    <span class="s2">yield </span><span class="s1">capture_fixture</span>
+    <span class="s1">capture_fixture</span><span class="s3">.</span><span class="s1">close</span><span class="s3">()</span>
+    <span class="s1">capman</span><span class="s3">.</span><span class="s1">unset_fixture</span><span class="s3">()</span>
+
+
+<span class="s3">@</span><span class="s1">fixture</span>
+<span class="s2">def </span><span class="s1">capsysbinary</span><span class="s3">(</span><span class="s1">request</span><span class="s3">: </span><span class="s1">SubRequest</span><span class="s3">) </span><span class="s1">-&gt; Generator</span><span class="s3">[</span><span class="s1">CaptureFixture</span><span class="s3">[</span><span class="s1">bytes</span><span class="s3">], </span><span class="s2">None</span><span class="s3">, </span><span class="s2">None</span><span class="s3">]:</span>
+    <span class="s0">r&quot;&quot;&quot;Enable bytes capturing of writes to ``sys.stdout`` and ``sys.stderr``. 
+ 
+    The captured output is made available via ``capsysbinary.readouterr()`` 
+    method calls, which return a ``(out, err)`` namedtuple. 
+    ``out`` and ``err`` will be ``bytes`` objects. 
+ 
+    Returns an instance of :class:`CaptureFixture[bytes] &lt;pytest.CaptureFixture&gt;`. 
+ 
+    Example: 
+ 
+    .. code-block:: python 
+ 
+        def test_output(capsysbinary): 
+            print(&quot;hello&quot;) 
+            captured = capsysbinary.readouterr() 
+            assert captured.out == b&quot;hello\n&quot; 
+    &quot;&quot;&quot;</span>
+    <span class="s1">capman</span><span class="s3">: </span><span class="s1">CaptureManager </span><span class="s3">= </span><span class="s1">request</span><span class="s3">.</span><span class="s1">config</span><span class="s3">.</span><span class="s1">pluginmanager</span><span class="s3">.</span><span class="s1">getplugin</span><span class="s3">(</span><span class="s4">&quot;capturemanager&quot;</span><span class="s3">)</span>
+    <span class="s1">capture_fixture </span><span class="s3">= </span><span class="s1">CaptureFixture</span><span class="s3">(</span><span class="s1">SysCaptureBinary</span><span class="s3">, </span><span class="s1">request</span><span class="s3">, </span><span class="s1">_ispytest</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+    <span class="s1">capman</span><span class="s3">.</span><span class="s1">set_fixture</span><span class="s3">(</span><span class="s1">capture_fixture</span><span class="s3">)</span>
+    <span class="s1">capture_fixture</span><span class="s3">.</span><span class="s1">_start</span><span class="s3">()</span>
+    <span class="s2">yield </span><span class="s1">capture_fixture</span>
+    <span class="s1">capture_fixture</span><span class="s3">.</span><span class="s1">close</span><span class="s3">()</span>
+    <span class="s1">capman</span><span class="s3">.</span><span class="s1">unset_fixture</span><span class="s3">()</span>
+
+
+<span class="s3">@</span><span class="s1">fixture</span>
+<span class="s2">def </span><span class="s1">capfd</span><span class="s3">(</span><span class="s1">request</span><span class="s3">: </span><span class="s1">SubRequest</span><span class="s3">) </span><span class="s1">-&gt; Generator</span><span class="s3">[</span><span class="s1">CaptureFixture</span><span class="s3">[</span><span class="s1">str</span><span class="s3">], </span><span class="s2">None</span><span class="s3">, </span><span class="s2">None</span><span class="s3">]:</span>
+    <span class="s0">r&quot;&quot;&quot;Enable text capturing of writes to file descriptors ``1`` and ``2``. 
+ 
+    The captured output is made available via ``capfd.readouterr()`` method 
+    calls, which return a ``(out, err)`` namedtuple. 
+    ``out`` and ``err`` will be ``text`` objects. 
+ 
+    Returns an instance of :class:`CaptureFixture[str] &lt;pytest.CaptureFixture&gt;`. 
+ 
+    Example: 
+ 
+    .. code-block:: python 
+ 
+        def test_system_echo(capfd): 
+            os.system('echo &quot;hello&quot;') 
+            captured = capfd.readouterr() 
+            assert captured.out == &quot;hello\n&quot; 
+    &quot;&quot;&quot;</span>
+    <span class="s1">capman</span><span class="s3">: </span><span class="s1">CaptureManager </span><span class="s3">= </span><span class="s1">request</span><span class="s3">.</span><span class="s1">config</span><span class="s3">.</span><span class="s1">pluginmanager</span><span class="s3">.</span><span class="s1">getplugin</span><span class="s3">(</span><span class="s4">&quot;capturemanager&quot;</span><span class="s3">)</span>
+    <span class="s1">capture_fixture </span><span class="s3">= </span><span class="s1">CaptureFixture</span><span class="s3">(</span><span class="s1">FDCapture</span><span class="s3">, </span><span class="s1">request</span><span class="s3">, </span><span class="s1">_ispytest</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+    <span class="s1">capman</span><span class="s3">.</span><span class="s1">set_fixture</span><span class="s3">(</span><span class="s1">capture_fixture</span><span class="s3">)</span>
+    <span class="s1">capture_fixture</span><span class="s3">.</span><span class="s1">_start</span><span class="s3">()</span>
+    <span class="s2">yield </span><span class="s1">capture_fixture</span>
+    <span class="s1">capture_fixture</span><span class="s3">.</span><span class="s1">close</span><span class="s3">()</span>
+    <span class="s1">capman</span><span class="s3">.</span><span class="s1">unset_fixture</span><span class="s3">()</span>
+
+
+<span class="s3">@</span><span class="s1">fixture</span>
+<span class="s2">def </span><span class="s1">capfdbinary</span><span class="s3">(</span><span class="s1">request</span><span class="s3">: </span><span class="s1">SubRequest</span><span class="s3">) </span><span class="s1">-&gt; Generator</span><span class="s3">[</span><span class="s1">CaptureFixture</span><span class="s3">[</span><span class="s1">bytes</span><span class="s3">], </span><span class="s2">None</span><span class="s3">, </span><span class="s2">None</span><span class="s3">]:</span>
+    <span class="s0">r&quot;&quot;&quot;Enable bytes capturing of writes to file descriptors ``1`` and ``2``. 
+ 
+    The captured output is made available via ``capfd.readouterr()`` method 
+    calls, which return a ``(out, err)`` namedtuple. 
+    ``out`` and ``err`` will be ``byte`` objects. 
+ 
+    Returns an instance of :class:`CaptureFixture[bytes] &lt;pytest.CaptureFixture&gt;`. 
+ 
+    Example: 
+ 
+    .. code-block:: python 
+ 
+        def test_system_echo(capfdbinary): 
+            os.system('echo &quot;hello&quot;') 
+            captured = capfdbinary.readouterr() 
+            assert captured.out == b&quot;hello\n&quot; 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">capman</span><span class="s3">: </span><span class="s1">CaptureManager </span><span class="s3">= </span><span class="s1">request</span><span class="s3">.</span><span class="s1">config</span><span class="s3">.</span><span class="s1">pluginmanager</span><span class="s3">.</span><span class="s1">getplugin</span><span class="s3">(</span><span class="s4">&quot;capturemanager&quot;</span><span class="s3">)</span>
+    <span class="s1">capture_fixture </span><span class="s3">= </span><span class="s1">CaptureFixture</span><span class="s3">(</span><span class="s1">FDCaptureBinary</span><span class="s3">, </span><span class="s1">request</span><span class="s3">, </span><span class="s1">_ispytest</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+    <span class="s1">capman</span><span class="s3">.</span><span class="s1">set_fixture</span><span class="s3">(</span><span class="s1">capture_fixture</span><span class="s3">)</span>
+    <span class="s1">capture_fixture</span><span class="s3">.</span><span class="s1">_start</span><span class="s3">()</span>
+    <span class="s2">yield </span><span class="s1">capture_fixture</span>
+    <span class="s1">capture_fixture</span><span class="s3">.</span><span class="s1">close</span><span class="s3">()</span>
+    <span class="s1">capman</span><span class="s3">.</span><span class="s1">unset_fixture</span><span class="s3">()</span>
+</pre>
+</body>
+</html>

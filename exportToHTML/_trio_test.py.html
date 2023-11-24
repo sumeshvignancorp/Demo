@@ -1,0 +1,51 @@
+<html>
+<head>
+<title>_trio_test.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #7a7e85;}
+.s4 { color: #2aacb8;}
+.s5 { color: #6aab73;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+_trio_test.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">functools </span><span class="s0">import </span><span class="s1">partial</span><span class="s2">, </span><span class="s1">wraps</span>
+
+<span class="s0">from </span><span class="s2">.. </span><span class="s0">import </span><span class="s1">_core</span>
+<span class="s0">from </span><span class="s2">..</span><span class="s1">abc </span><span class="s0">import </span><span class="s1">Clock</span><span class="s2">, </span><span class="s1">Instrument</span>
+
+
+<span class="s3"># Use:</span>
+<span class="s3">#</span>
+<span class="s3">#    @trio_test</span>
+<span class="s3">#    async def test_whatever():</span>
+<span class="s3">#        await ...</span>
+<span class="s3">#</span>
+<span class="s3"># Also: if a pytest fixture is passed in that subclasses the Clock abc, then</span>
+<span class="s3"># that clock is passed to trio.run().</span>
+<span class="s0">def </span><span class="s1">trio_test</span><span class="s2">(</span><span class="s1">fn</span><span class="s2">):</span>
+    <span class="s2">@</span><span class="s1">wraps</span><span class="s2">(</span><span class="s1">fn</span><span class="s2">)</span>
+    <span class="s0">def </span><span class="s1">wrapper</span><span class="s2">(**</span><span class="s1">kwargs</span><span class="s2">):</span>
+        <span class="s1">__tracebackhide__ </span><span class="s2">= </span><span class="s0">True</span>
+        <span class="s1">clocks </span><span class="s2">= [</span><span class="s1">c </span><span class="s0">for </span><span class="s1">c </span><span class="s0">in </span><span class="s1">kwargs</span><span class="s2">.</span><span class="s1">values</span><span class="s2">() </span><span class="s0">if </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">c</span><span class="s2">, </span><span class="s1">Clock</span><span class="s2">)]</span>
+        <span class="s0">if not </span><span class="s1">clocks</span><span class="s2">:</span>
+            <span class="s1">clock </span><span class="s2">= </span><span class="s0">None</span>
+        <span class="s0">elif </span><span class="s1">len</span><span class="s2">(</span><span class="s1">clocks</span><span class="s2">) == </span><span class="s4">1</span><span class="s2">:</span>
+            <span class="s1">clock </span><span class="s2">= </span><span class="s1">clocks</span><span class="s2">[</span><span class="s4">0</span><span class="s2">]</span>
+        <span class="s0">else</span><span class="s2">:</span>
+            <span class="s0">raise </span><span class="s1">ValueError</span><span class="s2">(</span><span class="s5">&quot;too many clocks spoil the broth!&quot;</span><span class="s2">)</span>
+        <span class="s1">instruments </span><span class="s2">= [</span><span class="s1">i </span><span class="s0">for </span><span class="s1">i </span><span class="s0">in </span><span class="s1">kwargs</span><span class="s2">.</span><span class="s1">values</span><span class="s2">() </span><span class="s0">if </span><span class="s1">isinstance</span><span class="s2">(</span><span class="s1">i</span><span class="s2">, </span><span class="s1">Instrument</span><span class="s2">)]</span>
+        <span class="s0">return </span><span class="s1">_core</span><span class="s2">.</span><span class="s1">run</span><span class="s2">(</span><span class="s1">partial</span><span class="s2">(</span><span class="s1">fn</span><span class="s2">, **</span><span class="s1">kwargs</span><span class="s2">), </span><span class="s1">clock</span><span class="s2">=</span><span class="s1">clock</span><span class="s2">, </span><span class="s1">instruments</span><span class="s2">=</span><span class="s1">instruments</span><span class="s2">)</span>
+
+    <span class="s0">return </span><span class="s1">wrapper</span>
+</pre>
+</body>
+</html>

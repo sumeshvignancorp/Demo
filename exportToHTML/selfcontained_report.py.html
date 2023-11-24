@@ -1,0 +1,60 @@
+<html>
+<head>
+<title>selfcontained_report.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #7a7e85;}
+.s1 { color: #bcbec4;}
+.s2 { color: #cf8e6d;}
+.s3 { color: #bcbec4;}
+.s4 { color: #6aab73;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+selfcontained_report.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># This Source Code Form is subject to the terms of the Mozilla Public</span>
+<span class="s0"># License, v. 2.0. If a copy of the MPL was not distributed with this</span>
+<span class="s0"># file, You can obtain one at http://mozilla.org/MPL/2.0/.</span>
+<span class="s2">import </span><span class="s1">base64</span>
+<span class="s2">import </span><span class="s1">binascii</span>
+<span class="s2">import </span><span class="s1">warnings</span>
+
+<span class="s2">from </span><span class="s1">pytest_html</span><span class="s3">.</span><span class="s1">basereport </span><span class="s2">import </span><span class="s1">BaseReport</span>
+
+
+<span class="s2">class </span><span class="s1">SelfContainedReport</span><span class="s3">(</span><span class="s1">BaseReport</span><span class="s3">):</span>
+    <span class="s2">def </span><span class="s1">__init__</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">report_path</span><span class="s3">, </span><span class="s1">config</span><span class="s3">, </span><span class="s1">report_data</span><span class="s3">, </span><span class="s1">template</span><span class="s3">, </span><span class="s1">css</span><span class="s3">):</span>
+        <span class="s1">super</span><span class="s3">().</span><span class="s1">__init__</span><span class="s3">(</span><span class="s1">report_path</span><span class="s3">, </span><span class="s1">config</span><span class="s3">, </span><span class="s1">report_data</span><span class="s3">, </span><span class="s1">template</span><span class="s3">, </span><span class="s1">css</span><span class="s3">)</span>
+
+    <span class="s3">@</span><span class="s1">property</span>
+    <span class="s2">def </span><span class="s1">css</span><span class="s3">(</span><span class="s1">self</span><span class="s3">):</span>
+        <span class="s2">return </span><span class="s1">self</span><span class="s3">.</span><span class="s1">_css</span>
+
+    <span class="s2">def </span><span class="s1">_data_content</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">content</span><span class="s3">, </span><span class="s1">mime_type</span><span class="s3">, *</span><span class="s1">args</span><span class="s3">, **</span><span class="s1">kwargs</span><span class="s3">):</span>
+        <span class="s1">charset </span><span class="s3">= </span><span class="s4">&quot;utf-8&quot;</span>
+        <span class="s1">data </span><span class="s3">= </span><span class="s1">base64</span><span class="s3">.</span><span class="s1">b64encode</span><span class="s3">(</span><span class="s1">content</span><span class="s3">.</span><span class="s1">encode</span><span class="s3">(</span><span class="s1">charset</span><span class="s3">)).</span><span class="s1">decode</span><span class="s3">(</span><span class="s1">charset</span><span class="s3">)</span>
+        <span class="s2">return </span><span class="s4">f&quot;data:</span><span class="s2">{</span><span class="s1">mime_type</span><span class="s2">}</span><span class="s4">;charset=</span><span class="s2">{</span><span class="s1">charset</span><span class="s2">}</span><span class="s4">;base64,</span><span class="s2">{</span><span class="s1">data</span><span class="s2">}</span><span class="s4">&quot;</span>
+
+    <span class="s2">def </span><span class="s1">_media_content</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, </span><span class="s1">content</span><span class="s3">, </span><span class="s1">mime_type</span><span class="s3">, *</span><span class="s1">args</span><span class="s3">, **</span><span class="s1">kwargs</span><span class="s3">):</span>
+        <span class="s2">try</span><span class="s3">:</span>
+            <span class="s0"># test if content is base64</span>
+            <span class="s1">base64</span><span class="s3">.</span><span class="s1">b64decode</span><span class="s3">(</span><span class="s1">content</span><span class="s3">.</span><span class="s1">encode</span><span class="s3">(</span><span class="s4">&quot;utf-8&quot;</span><span class="s3">), </span><span class="s1">validate</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+            <span class="s2">return </span><span class="s4">f&quot;data:</span><span class="s2">{</span><span class="s1">mime_type</span><span class="s2">}</span><span class="s4">;base64,</span><span class="s2">{</span><span class="s1">content</span><span class="s2">}</span><span class="s4">&quot;</span>
+        <span class="s2">except </span><span class="s1">binascii</span><span class="s3">.</span><span class="s1">Error</span><span class="s3">:</span>
+            <span class="s0"># if not base64, issue warning and just return as it's a file or link</span>
+            <span class="s1">warnings</span><span class="s3">.</span><span class="s1">warn</span><span class="s3">(</span>
+                <span class="s4">&quot;Self-contained HTML report &quot;</span>
+                <span class="s4">&quot;includes link to external &quot;</span>
+                <span class="s4">f&quot;resource: </span><span class="s2">{</span><span class="s1">content</span><span class="s2">}</span><span class="s4">&quot;</span>
+            <span class="s3">)</span>
+            <span class="s2">return </span><span class="s1">content</span>
+
+    <span class="s2">def </span><span class="s1">_generate_report</span><span class="s3">(</span><span class="s1">self</span><span class="s3">, *</span><span class="s1">args</span><span class="s3">, **</span><span class="s1">kwargs</span><span class="s3">):</span>
+        <span class="s1">super</span><span class="s3">().</span><span class="s1">_generate_report</span><span class="s3">(</span><span class="s1">self_contained</span><span class="s3">=</span><span class="s2">True</span><span class="s3">)</span>
+</pre>
+</body>
+</html>

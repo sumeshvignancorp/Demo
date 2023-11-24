@@ -1,0 +1,59 @@
+<html>
+<head>
+<title>test_reports.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #2aacb8;}
+.s4 { color: #6aab73;}
+.s5 { color: #7a7e85;}
+</style>
+</head>
+<body bgcolor="#1e1f22">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+test_reports.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">time</span>
+
+<span class="s0">from </span><span class="s1">selenium </span><span class="s0">import </span><span class="s1">webdriver</span>
+<span class="s0">from </span><span class="s1">selenium</span><span class="s2">.</span><span class="s1">common </span><span class="s0">import </span><span class="s1">StaleElementReferenceException</span>
+<span class="s0">from </span><span class="s1">selenium</span><span class="s2">.</span><span class="s1">webdriver</span><span class="s2">.</span><span class="s1">chrome</span><span class="s2">.</span><span class="s1">service </span><span class="s0">import </span><span class="s1">Service </span><span class="s0">as </span><span class="s1">ChromeService</span>
+<span class="s0">from </span><span class="s1">webdriver_manager</span><span class="s2">.</span><span class="s1">chrome </span><span class="s0">import </span><span class="s1">ChromeDriverManager</span>
+
+
+<span class="s0">def </span><span class="s1">test_report</span><span class="s2">():</span>
+    <span class="s1">driver </span><span class="s2">= </span><span class="s1">webdriver</span><span class="s2">.</span><span class="s1">Chrome</span><span class="s2">(</span><span class="s1">service</span><span class="s2">=</span><span class="s1">ChromeService</span><span class="s2">(</span><span class="s1">ChromeDriverManager</span><span class="s2">().</span><span class="s1">install</span><span class="s2">()))</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">implicitly_wait</span><span class="s2">(</span><span class="s3">10</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">maximize_window</span><span class="s2">()</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">get</span><span class="s2">(</span><span class="s4">&quot;https://pg.ajnaview.net/&quot;</span><span class="s2">)</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s3">3</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s4">&quot;name&quot;</span><span class="s2">, </span><span class="s4">&quot;email&quot;</span><span class="s2">).</span><span class="s1">send_keys</span><span class="s2">(</span><span class="s4">&quot;sumesh@vignancorp.com&quot;</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s4">&quot;name&quot;</span><span class="s2">, </span><span class="s4">&quot;password&quot;</span><span class="s2">).</span><span class="s1">send_keys</span><span class="s2">(</span><span class="s4">&quot;ajNa785#&quot;</span><span class="s2">)</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s3">2</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s4">&quot;xpath&quot;</span><span class="s2">, </span><span class="s4">&quot;(//button[@type='button'])[2]&quot;</span><span class="s2">).</span><span class="s1">click</span><span class="s2">()</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s3">5</span><span class="s2">)</span>
+
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s4">&quot;xpath&quot;</span><span class="s2">, </span><span class="s4">&quot;(//div[@role='button'])[3]&quot;</span><span class="s2">).</span><span class="s1">click</span><span class="s2">() </span><span class="s5"># reports</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s4">&quot;xpath&quot;</span><span class="s2">, </span><span class="s4">&quot;(//a[@tabindex='0'])[2]&quot;</span><span class="s2">).</span><span class="s1">click</span><span class="s2">() </span><span class="s5"># combined</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">refresh</span><span class="s2">()</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s4">&quot;xpath&quot;</span><span class="s2">, </span><span class="s4">&quot;(//div[@role='combobox'])[1]&quot;</span><span class="s2">).</span><span class="s1">click</span><span class="s2">() </span><span class="s5"># dropdown</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s3">5</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s4">&quot;xpath&quot;</span><span class="s2">, </span><span class="s4">&quot;//li[@role='option'][1]&quot;</span><span class="s2">).</span><span class="s1">click</span><span class="s2">() </span><span class="s5"># item click</span>
+    <span class="s5"># driver.find_element(&quot;xpath&quot;, &quot;(//div[@role='combobox'])[2]&quot;).click() # PERIOD</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s3">3</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">find_element</span><span class="s2">(</span><span class="s4">&quot;xpath&quot;</span><span class="s2">, </span><span class="s4">&quot;(//button[@type='button'])[2]&quot;</span><span class="s2">).</span><span class="s1">click</span><span class="s2">()</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s3">5</span><span class="s2">)</span>
+    <span class="s1">driver</span><span class="s2">.</span><span class="s1">get_screenshot_as_file</span><span class="s2">(</span><span class="s4">&quot;report_page.png&quot;</span><span class="s2">)</span>
+    <span class="s1">time</span><span class="s2">.</span><span class="s1">sleep</span><span class="s2">(</span><span class="s3">4</span><span class="s2">)</span>
+    <span class="s5"># drop = Select(driver.find_element(&quot;xpath&quot;, &quot;(//input[@tabindex='-1'])[1]&quot;))</span>
+    <span class="s5"># drop.select_by_index(2)</span>
+
+    <span class="s5"># driver.find_element(&quot;xpath&quot;, &quot;//div[@role='combobox'][1]&quot;).click() # dropdown</span>
+
+</pre>
+</body>
+</html>

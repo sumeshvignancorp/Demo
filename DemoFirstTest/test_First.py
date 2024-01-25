@@ -12,14 +12,12 @@ def test_login_valid_credentials():
     driver.get("https://pg.ajnaview.net/")
     time.sleep(5)
     driver.find_element("name", "email").send_keys("sumesh@vignancorp.com")
-    driver.find_element("name", "password").send_keys("ajNa785#")
+    driver.find_element("name", "password").send_keys("Sumesh@123")
     time.sleep(2)
     driver.find_element("xpath", "(//button[@type='button'])[2]").click()  # Login Button
     print("Title :", driver.title)
     time.sleep(10)
-    driver.get_screenshot_as_file("screenshot.png")
-    driver.find_element("xpath", "(//div[@role='button'])[11]").click()
-    time.sleep(6)
+    driver.get_screenshot_as_file("Login success.png")
     driver.quit()
 
 
@@ -35,7 +33,7 @@ def test_login_invalid_credentials():
     time.sleep(2)
     driver.find_element("xpath", "(//button[@type='button'])[2]").click()  # Login_button
     print("Title 4 :", driver.title)
-    time.sleep(6)
+    time.sleep(2)
     driver.quit()
 
 
@@ -49,7 +47,7 @@ def test_login_empty_credentials():
     time.sleep(2)
     driver.find_element("xpath", "(//button[@type='button'])[2]").click()
     print("Title :", driver.title)
-    time.sleep(6)
+    time.sleep(2)
     driver.quit()
 
 

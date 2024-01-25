@@ -12,7 +12,7 @@ def test_login_valid_credentials():
     driver.maximize_window()
     driver.get("https://pg.ajnaview.net/")
     driver.find_element("name", "email").send_keys("sumesh@vignancorp.com")
-    driver.find_element("name", "password").send_keys("ajNa785#")
+    driver.find_element("name", "password").send_keys("Sumesh@123")
     driver.find_element("xpath", "(//button[@type='button'])[2]").click()  # Login Button
     driver.find_element("xpath", "(//button[@role='tab'])[2]").click()
     time.sleep(3)

@@ -1,7 +1,6 @@
 import time
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
-from selenium.webdriver.support.select import Select
 from selenium.webdriver.support.ui import Select
 from webdriver_manager.chrome import ChromeDriverManager
 
@@ -12,10 +11,11 @@ def test_view():
     driver.get("https://pg.ajnaview.net/")
     time.sleep(5)
     driver.find_element("name", "email").send_keys("sumesh@vignancorp.com")
-    driver.find_element("name", "password").send_keys("ajNa785#")
+    driver.find_element("name", "password").send_keys("Sumesh@123")
     time.sleep(2)
     driver.find_element("xpath", "(//button[@type='button'])[2]").click()
 
+    time.sleep(5)
     # Add_device
     driver.find_element("xpath", "(//button[@type='button'])[5]").click()
     time.sleep(5)
@@ -27,10 +27,9 @@ def test_view():
     driver.find_element("xpath", "(//input[@type='text'])[3]").send_keys("FM00012")
 
     time.sleep(5)
-
-    # drop = Select(driver.find_element("xpath", "(//div[@role='combobox'])[1]"))
-    # drop.select_by_visible_text("Car")
-    # time.sleep(5)
+    #drop = Select(driver.find_element("xpath", "(//div[@role='combobox'])[1]"))
+    #drop.select_by_visible_text("Car")
+    #time.sleep(5)
     #drop = Select(driver.find_element("xpath", "(//div[@role='combobox'])[1]"))
 
     driver.find_element("xpath", "(//input[@type='text'])[4]").send_keys("user")
@@ -63,4 +62,13 @@ def test_view():
     time.sleep(2)
     driver.find_element("xpath", "(//button[@type='button'])[6]").click()
     time.sleep(6)
+
+#delete device
+    driver.find_element("xpath", "(//button[@type='button'])[15]").click()
+    time.sleep(2)
+    driver.find_element("xpath", "(// li[@ role='menuitem'])[7]").click()
+    time.sleep(3)
+    driver.find_element("xpath", "(// button[@ type='button'])[27]").click()
+    time.sleep(6)
     driver.quit()
+

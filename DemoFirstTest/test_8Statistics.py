@@ -6,6 +6,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 
 def test_Statistics():
+
     # driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
     driver = webdriver.Chrome(r"D:\chromedriver.exe")
     driver.implicitly_wait(20)

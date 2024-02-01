@@ -41,7 +41,7 @@ def test_report():
     # time.sleep(1)
     driver.find_element("xpath", "(//button[@type='button'])[5]").click()
     driver.find_element("xpath", "(//li[@role='menuitem'])[1]").click()
-    driver.get_screenshot_as_file("report_page.png")
+    driver.get_screenshot_as_file("12report_page.png")
     driver.quit()
     # drop = Select(driver.find_element("xpath", "(//input[@tabindex='-1'])[1]"))
     # drop.select_by_index(2)

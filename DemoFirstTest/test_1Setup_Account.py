@@ -23,7 +23,7 @@ def test_new_acc():
     time.sleep(5)
     driver.find_element("xpath", "(//button[@type='button'])[2]").click()
     time.sleep(1)
-    driver.get_screenshot_as_file("Account created.png")
+    driver.get_screenshot_as_file("1Account created.png")
     time.sleep(2)
     driver.quit()
 

@@ -28,6 +28,6 @@ def test_Statistics():
     time.sleep(2)
     driver.find_element("xpath", "(//button[@type='button'])[4]").click()
     time.sleep(3)
-    driver.get_screenshot_as_file("Statistics.png")
+    driver.get_screenshot_as_file("13Statistics.png")
     time.sleep(1)
     driver.quit()

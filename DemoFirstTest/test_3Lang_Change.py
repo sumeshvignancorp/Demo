@@ -17,6 +17,6 @@ def test_language():
     time.sleep(3)
     driver.find_element(By.XPATH, "//li[@role='option'][4]").click()
     time.sleep(2)
-    driver.get_screenshot_as_file("Language change.png")
+    driver.get_screenshot_as_file("3Language change.png")
     time.sleep(2)
     driver.quit()

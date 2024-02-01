@@ -19,7 +19,7 @@ def test_login_valid_credentials():
     driver.find_element("xpath", "(//button[@type='button'])[2]").click()  # Login Button
     print("Title :", driver.title)
     time.sleep(10)
-    driver.get_screenshot_as_file("Login success.png")
+    driver.get_screenshot_as_file("4Login success.png")
     driver.quit()
 
 
@@ -35,7 +35,7 @@ def test_login_invalid_credentials():
     driver.find_element("name", "password").send_keys(generate_email_with_time_stamp())
     time.sleep(2)
     driver.find_element("xpath", "(//button[@type='button'])[2]").click()  # Login_button
-    driver.get_screenshot_as_file("Invalid login.png")
+    driver.get_screenshot_as_file("5Invalid login.png")
     time.sleep(2)
     driver.quit()
 
@@ -43,14 +43,13 @@ def test_login_invalid_credentials():
 def test_login_empty_credentials():
     # driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
     driver = webdriver.Chrome(r"D:\chromedriver.exe")
+    driver.implicitly_wait(5)
     driver.maximize_window()
     driver.get("https://pg.ajnaview.net/")
-    time.sleep(5)
     driver.find_element("name", "email").send_keys("")
     driver.find_element("name", "password").send_keys("")
-    time.sleep(2)
     driver.find_element("xpath", "(//button[@type='button'])[2]").click()
-    driver.get_screenshot_as_file("Empty login.png")
+    driver.get_screenshot_as_file("6Empty login.png")
     driver.quit()
 
 

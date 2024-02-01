@@ -6,34 +6,33 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 
 def test_view():
-    driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
+    # driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
+    driver = webdriver.Chrome(r"D:\chromedriver.exe")
+    driver.implicitly_wait(10)
     driver.maximize_window()
     driver.get("https://pg.ajnaview.net/")
     time.sleep(5)
-    driver.find_element("name", "email").send_keys("sumesh@vignancorp.com")
-    driver.find_element("name", "password").send_keys("Sumesh@123")
+    driver.find_element("name", "email").send_keys("demo123@gmail.com")
+    driver.find_element("name", "password").send_keys("demo123")
     time.sleep(2)
     driver.find_element("xpath", "(//button[@type='button'])[2]").click()
 
     time.sleep(5)
     # Add_device
-    driver.find_element("xpath", "(//button[@type='button'])[5]").click()
+    driver.find_element("xpath", "(//button[@type='button'])[7]").click()
     time.sleep(5)
     # Device_details
-    driver.find_element("xpath", "(//input[@type='text'])[1]").send_keys("GPS")
-
+    driver.find_element("xpath", "(//input[@type='text'])[1]").send_keys("Testing")
     driver.find_element("xpath", "(//input[@type='text'])[2]").send_keys("5478765455")
-
     driver.find_element("xpath", "(//input[@type='text'])[3]").send_keys("FM00012")
-
     time.sleep(5)
-    #drop = Select(driver.find_element("xpath", "(//div[@role='combobox'])[1]"))
-    #drop.select_by_visible_text("Car")
-    #time.sleep(5)
-    #drop = Select(driver.find_element("xpath", "(//div[@role='combobox'])[1]"))
+
+    # drop = Select(driver.find_element("xpath", "(//div[@role='combobox'])[1]"))
+    # drop.select_by_visible_text("Car")
+    # time.sleep(5)
+    # drop = Select(driver.find_element("xpath", "(//div[@role='combobox'])[1]"))
 
     driver.find_element("xpath", "(//input[@type='text'])[4]").send_keys("user")
-
     driver.find_element("xpath", "(//input[@type='text'])[5]").send_keys("8985969855")
     time.sleep(3)
     # Vehicle details
@@ -53,22 +52,23 @@ def test_view():
     driver.find_element("xpath", "(//input[@type='text'])[8]").send_keys("12345")
 
     driver.find_element("xpath", "(//input[@type='text'])[9]").send_keys("12345")
-
     driver.find_element("xpath", "(//input[@type='text'])[10]").send_keys("Jio")
-
-    driver.find_element("xpath", "(//input[@type='date'])[2]").send_keys("01062023")
     time.sleep(3)
-    driver.find_element("xpath", "(//input[@type='date'])[3]").send_keys("01012024")
-    time.sleep(2)
-    driver.find_element("xpath", "(//button[@type='button'])[6]").click()
+    # driver.find_element("xpath", "(//input[@type='date'])[2]").send_keys("02022024")
+    # time.sleep(3)
+    # driver.find_element("xpath", "(//input[@type='date'])[3]").send_keys("01042024")
+    # time.sleep(2)
+    driver.find_element("xpath", "(//button[@tabindex='0'])[7]").click()
     time.sleep(6)
+    driver.get_screenshot_as_file("New device added.png")
 
-#delete device
-    driver.find_element("xpath", "(//button[@type='button'])[15]").click()
+    # delete device
+    driver.find_element("xpath", "(//button[@type='button'])[28]").click()
     time.sleep(2)
     driver.find_element("xpath", "(// li[@ role='menuitem'])[7]").click()
     time.sleep(3)
-    driver.find_element("xpath", "(// button[@ type='button'])[27]").click()
-    time.sleep(6)
+    driver.get_screenshot_as_file("Delete confirmation.png")
+    driver.find_element("xpath", "(// button[@ type='button'])[37]").click()
+    time.sleep(2)
+    driver.get_screenshot_as_file("Device deleted.png")
     driver.quit()
-

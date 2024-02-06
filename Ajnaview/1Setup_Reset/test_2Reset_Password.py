@@ -6,8 +6,8 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 
 def test_reset_password():
-    # driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
-    driver = webdriver.Chrome(r"D:\chromedriver.exe")
+    driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
+    # driver = webdriver.Chrome(r"D:\chromedriver.exe")
     driver.implicitly_wait(10)
     driver.maximize_window()
     driver.get("https://pg.ajnaview.net/")

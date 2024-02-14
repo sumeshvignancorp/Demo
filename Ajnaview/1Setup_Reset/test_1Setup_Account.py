@@ -6,9 +6,9 @@ from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
 
 
-def test_new_acc():
-    # driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
-    driver = webdriver.Chrome(r"D:\chromedriver.exe")
+def test_Setup_Acc():
+    driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
+    # driver = webdriver.Chrome(r"D:\chromedriver.exe")
     driver.implicitly_wait(10)
     driver.maximize_window()
     driver.get("https://pg.ajnaview.net/")
@@ -23,7 +23,7 @@ def test_new_acc():
     time.sleep(5)
     driver.find_element("xpath", "(//button[@type='button'])[2]").click()
     time.sleep(1)
-    driver.get_screenshot_as_file("1Account created.png")
+    driver.get_screenshot_as_file("../Results&Status/1Account created.png")
     time.sleep(2)
     driver.quit()
 

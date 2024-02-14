@@ -5,9 +5,9 @@ from selenium.webdriver.support.ui import Select
 from webdriver_manager.chrome import ChromeDriverManager
 
 
-def test_view():
-    # driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
-    driver = webdriver.Chrome(r"D:\chromedriver.exe")
+def test_Add_Device():
+    driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
+    # driver = webdriver.Chrome(r"D:\chromedriver.exe")
     driver.implicitly_wait(10)
     driver.maximize_window()
     driver.get("https://pg.ajnaview.net/")
@@ -60,15 +60,15 @@ def test_view():
     # time.sleep(2)
     driver.find_element("xpath", "(//button[@tabindex='0'])[7]").click()
     time.sleep(6)
-    driver.get_screenshot_as_file("7New device added.png")
+    driver.get_screenshot_as_file("../Results&Status/7New device added.png")
 
     # delete device
-    driver.find_element("xpath", "(//button[@type='button'])[28]").click()
+    driver.find_element("xpath", "(//button[@type='button'])[30]").click()
     time.sleep(2)
     driver.find_element("xpath", "(// li[@ role='menuitem'])[7]").click()
     time.sleep(3)
-    driver.get_screenshot_as_file("8Delete confirmation.png")
-    driver.find_element("xpath", "(// button[@ type='button'])[37]").click()
+    driver.get_screenshot_as_file("../Results&Status/8Delete confirmation.png")
+    driver.find_element("xpath", "(// button[@ type='button'])[39]").click()
     time.sleep(2)
-    driver.get_screenshot_as_file("9Device deleted.png")
+    driver.get_screenshot_as_file("../Results&Status/8Device deleted.png")
     driver.quit()

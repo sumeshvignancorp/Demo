@@ -6,9 +6,9 @@ from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
 
 
-def test_login_valid_credentials():
-    driver = webdriver.Chrome(r"D:\chromedriver.exe")
-    # driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
+def test_swap_search():
+    # driver = webdriver.Chrome(r"D:\chromedriver.exe")
+    driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
     driver.implicitly_wait(10)
     driver.maximize_window()
     driver.get("https://pg.ajnaview.net/")
@@ -21,8 +21,8 @@ def test_login_valid_credentials():
     time.sleep(3)
     driver.find_element("xpath", "(//input[@type='text'])[1]").send_keys("FMC")
     time.sleep(2)
-    driver.get_screenshot_as_file("10Search device.png")
+    driver.get_screenshot_as_file("../Results&Status/10Search device.png")
     driver.find_element("xpath", "//button[@aria-label='Close']").click()
-    driver.get_screenshot_as_file("11close device list.png")
+    driver.get_screenshot_as_file("../Results&Status/11close device list.png")
     time.sleep(3)
     driver.quit()

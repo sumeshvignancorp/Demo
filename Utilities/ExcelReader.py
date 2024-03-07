@@ -16,3 +16,4 @@ def get_data_from_excel(path, sheet_name):
         final_list.append(row_list)
 
     return final_list
+

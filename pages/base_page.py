@@ -15,6 +15,5 @@ class BasePage:
 
         self.find(*locator).send_keys(value)
 
-
     def get_title(self):
-      return
+        return

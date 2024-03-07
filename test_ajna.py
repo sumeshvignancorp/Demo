@@ -17,3 +17,4 @@ def test_dropdown():
     # drop = Select(driver.find_element("xpath", "//input[@value='en']"))
     # drop.select_by_index(3)
     time.sleep(6)
+

@@ -26,3 +26,4 @@ def test_login_valid_credentials(username, password):
     print("Title :", driver.title)
     time.sleep(10)
     driver.close()
+

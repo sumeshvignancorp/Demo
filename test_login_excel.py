@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 
 import openpyxl
 import pytest
@@ -10,6 +11,11 @@ from Utilities import ExcelReader
 excel_path = "ExcelFiles/Ajnaviewlogindata.xlsx"
 workbook = openpyxl.load_workbook(excel_path)
 sheet = workbook.active
+
+
+@pytest.mark.parametrize('execution_number', range(5))
+def run_multiple_times(execution_number):
+    assert True
 
 
 @pytest.mark.parametrize("username,password",

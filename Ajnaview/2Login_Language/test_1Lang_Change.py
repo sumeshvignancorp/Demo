@@ -11,7 +11,7 @@ def test_language():
     driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
     driver.implicitly_wait(10)
     driver.maximize_window()
-    driver.get("https://pg.ajnaview.net/")
+    driver.get("https://tracking.ontrack-telematics.co.uk/")
     time.sleep(3)
     driver.find_element(By.XPATH, "//div[@role='combobox']").click()
     time.sleep(3)
